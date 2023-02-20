@@ -1,0 +1,11 @@
+name = "TetrisAI"
+uuid = "33da2bee-e94b-41f6-89d6-fbbafda940ee"
+authors = ["char5742 <f.shuuma@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Tetris = "7b9bd417-ef73-4d3d-bf88-d74753caa289"

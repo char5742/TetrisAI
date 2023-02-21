@@ -1,0 +1,5 @@
+.vscode
+
+output/*
+data/*
+model/*

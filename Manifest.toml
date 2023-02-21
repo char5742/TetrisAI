@@ -2,7 +2,7 @@
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "c8f5941e675a9d9ce1380f118a8d797367500243"
+project_hash = "66764c1b1ee3de299b0c49bf862e4a4dadb66c70"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -521,6 +521,12 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
+[[deps.ProgressBars]]
+deps = ["Printf"]
+git-tree-sha1 = "806ebc92e1b4b4f72192369a28dfcaf688566b2b"
+uuid = "49802e3a-d2f1-5c88-81d8-b72133a6f568"
+version = "1.4.1"
+
 [[deps.ProgressLogging]]
 deps = ["Logging", "SHA", "UUIDs"]
 git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
@@ -684,11 +690,11 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.Tetris]]
 deps = ["Printf", "Random"]
-git-tree-sha1 = "e33c2293509d449a461bca43bc09b26170f6ed82"
+git-tree-sha1 = "ceca1071f520e170740f45687407b0e9caf90322"
 repo-rev = "master"
 repo-url = "../Tetris"
 uuid = "7b9bd417-ef73-4d3d-bf88-d74753caa289"
-version = "0.1.7"
+version = "0.1.9"
 
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "Printf"]

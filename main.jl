@@ -13,7 +13,7 @@ combo_normalize(x) = x / 30.0
 end
 using .TetrisJulia
 function main()
-    model = load("mymodel_tspin.jld2")["model"]
+    model = load("model/mymodel_tspin.jld2")["model"]
     display(model)
     model = model |> gpu
 
@@ -29,7 +29,7 @@ function ai(model, game_state::GameState, move_state::MoveState)
     draw_game(game_state)
     start_time = time_ns()
     while !game_state.game_over_flag
-        node_list = get_can_action_list(game_state)
+        node_list = get_node_list(game_state)
         node = select_node(model,node_list, game_state)
         for action in node.action_list
             get_key_state(:VK_ESCAPE) == 1 && exit()

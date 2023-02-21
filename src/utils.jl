@@ -10,3 +10,10 @@ function sleep30fps(start_time)
         return true
     end
 end
+using DelimitedFiles
+function save_matrix(x::Matrix; filename="log.txt")
+    open(filename, "w+") do io
+        writedlm(io, x)
+        write(io, "\n\n")
+    end
+end

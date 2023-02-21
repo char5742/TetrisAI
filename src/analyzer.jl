@@ -56,47 +56,15 @@ function serch_can_set_space(
     _check_can_set!(space)
     return space
 end
-t_mino = [
-    0 1 0
-    1 1 1
-    0 0 0
-]
-test_board = [
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    0 0 0 0 0 0 0 0 0 0
-    1 1 1 0 0 0 0 1 0 0
-    0 0 0 0 0 0 0 1 0 0
-    0 0 0 0 0 0 0 1 0 0
-    0 0 0 0 0 0 0 0 0 0
-]
 
-
-function get_can_action_list(state::GameState)::Vector{Node}
+function get_node_list(state::GameState)::Vector{Node}
     if isnothing(state.hold_mino)
-        return [get_can_action_list(state.current_mino, state)..., get_can_action_list(state.mino_list[end], state; hold=true)...]
+        return [get_node_list(state.current_mino, state)..., get_node_list(state.mino_list[end], state; hold=true)...]
     end
-    [get_can_action_list(state.current_mino, state)..., get_can_action_list(state.hold_mino, state; hold=true)...]
+    [get_node_list(state.current_mino, state)..., get_node_list(state.hold_mino, state; hold=true)...]
 end
 
-function get_can_action_list(
+function get_node_list(
     mino::Mino, root_state::GameState; hold=false
 )::Vector{Node}
     node_list = Vector{Node}()
@@ -127,8 +95,8 @@ function get_can_action_list(
             can_set_place = serch_can_set_space(
                 new_mino.block, root_state.current_game_board.binary
             )
-            for (i, v) in pairs(can_set_place)
-                state = deepcopy(root_state)
+             for (i, v) in pairs(can_set_place)
+                state = GameState(root_state)
                 if v == 1
                     y, x = Tuple(i)
                     x -= 2
@@ -144,8 +112,9 @@ function get_can_action_list(
                     put_mino!(state)
                     # 未探索の盤面ならノードとして保存
                     if !(state.current_game_board.binary in simulated_board)
+                        dropped_position = move(new_position, x - new_position.x, y - new_position.y)
                         push!(simulated_board, state.current_game_board.binary)
-                        push!(node_list, Node(action_list, Mino(new_mino), tspin, state))
+                        push!(node_list, Node(action_list, new_mino, dropped_position, tspin, state))
                     end
                 end
             end
@@ -190,7 +159,7 @@ function get_can_action_list(
                     end
                     # 左右回転
                     for dor in [1, -1]
-                        state = deepcopy(root_state)
+                        state = GameState(root_state)
                         dropped_position = move(new_position, x - new_position.x, y - new_position.y)
                         rotated_mino, rotated_position, check = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
                         # 回転可能で、設置可能位置の場合
@@ -202,7 +171,7 @@ function get_can_action_list(
                             put_mino!(state)
                             if !(state.current_game_board.binary in simulated_board)
                                 push!(simulated_board, state.current_game_board.binary)
-                                push!(node_list, Node([action_list..., Action(0, 0, dor), Action(0, 0, 0, 0, true)], Mino(rotated_mino), tspin, state))
+                                push!(node_list, Node([action_list..., Action(0, 0, dor), Action(0, 0, 0, 0, true)], rotated_mino, rotated_position, tspin, state))
                             end
 
                         end
@@ -212,4 +181,19 @@ function get_can_action_list(
         end
     end
     return node_list
+end
+
+"""
+ミノの固定位置を示した配列を生成する
+"""
+function generate_minopos(mino::Mino, position::Position)::Matrix{Int64}
+    board = zeros(Int64, 24, 10)
+    mino_height, mino_width = size(mino.block)
+
+    for j in 1:mino_width, i in 1:mino_height
+        if checkbounds(Bool, board, i + position.y - 1, j + position.x - 1)
+            board[i+position.y-1, j+position.x-1] = mino.block[i, j]
+        end
+    end
+    return board
 end

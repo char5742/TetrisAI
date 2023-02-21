@@ -1,3 +1,18 @@
+struct Agent
+    id::Int64
+    epsilon::Float64
+    brain::Brain
+end
+
+function select_node(agent::Agent,node_list::Vector{Node}, state::GameState)::Node
+    if agent.epsilon> rand()
+        return rand(node_list)
+    else
+        return select_node(agent.brain.main_model, node_list,state)
+    end
+end
+
+
 function select_node(model,node_list::Vector{Node}, state::GameState)::Node
     currentbord = state.current_game_board.binary
     current_combo = state.combo
@@ -12,7 +27,6 @@ function select_node(model,node_list::Vector{Node}, state::GameState)::Node
     # score_list = model((currentbord_array + minopos_array, current_combo_array, current_back_to_back_array) |> gpu) |> cpu
     score_list = model(((currentbord_array, minopos_array), current_combo_array, current_back_to_back_array, tspin_array) |> gpu) |> cpu
     @views index = argmax(score_list[1, :])
-    return node_list[index]
-  
+    return node_list[index]  
 end
 

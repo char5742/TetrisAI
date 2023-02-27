@@ -1,4 +1,4 @@
-struct Experience
+mutable struct Experience
     prev_game_bord::Matrix{Int64}
     minopos::Matrix{Int64}
     prev_combo::Int

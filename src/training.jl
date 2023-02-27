@@ -11,8 +11,7 @@ mutable struct Learner
 end
 
 function make_experience(
-    main_model,
-    target_model,
+    brain::Brain,
     state::GameState,
     node::Node,
     discount_rate::Float64,
@@ -20,22 +19,27 @@ function make_experience(
     ϵ = 1e-5
     current_gameboard = state.current_game_board.binary
     minopos = generate_minopos(node.mino, node.position)
-     current_expect_reward = main_model((
-        (reshape(current_gameboard |> float, 24, 10, 1, 1), reshape(minopos |> float, 24, 10, 1, 1)),
-        state.combo, state.back_to_back_flag, node.tspin > 0 ? 1 : 0) |> gpu) |> x -> cpu(x)[1]
-
+    current_expect_reward = lock(brain.mainlock) do
+        brain.main_model((
+            (reshape(current_gameboard |> float, 24, 10, 1, 1), reshape(minopos |> float, 24, 10, 1, 1)),
+            state.combo |> Float32, state.back_to_back_flag |> Float32, (node.tspin > 0) |> Float32) |> gpu) |> x -> cpu(x)[1]
+    end
     if node.game_state.game_over_flag
         return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, node.tspin, -0.5, abs(-0.5 - current_expect_reward) + ϵ)
     end
-    reward = node.game_state.score - state.score
-    scaled_reward = (sqrt(reward / 200 + 1) - 1)
+    reward = (node.game_state.score - state.score)*(node.tspin>0)
+    scaled_reward = rescaling_reward(reward)
     # 次の盤面の最大の価値を算出する
     node_list = get_node_list(node.game_state)
-    max_node = select_node(main_model, node_list, node.game_state)
+    max_node =
+        select_node(brain.main_model, brain.mainlock, node_list, node.game_state)
+
     max_node_minopos = generate_minopos(max_node.mino, max_node.position)
-     p = target_model((
-        (reshape(node.game_state.current_game_board.binary |> float, 24, 10, 1, 1), reshape(max_node_minopos |> float, 24, 10, 1, 1)), node.game_state.combo, node.game_state.back_to_back_flag, max_node.tspin > 0 ? 1 : 0
-    ) |> gpu) |> x -> cpu(x)[1]
+    p = lock(brain.targetlock) do
+        brain.target_model((
+            (reshape(node.game_state.current_game_board.binary |> float, 24, 10, 1, 1), reshape(max_node_minopos |> float, 24, 10, 1, 1)), node.game_state.combo |> Float32, node.game_state.back_to_back_flag |> Float32, (max_node.tspin > 0) |> Float32
+        ) |> gpu) |> x -> cpu(x)[1]
+    end
     temporal_difference = scaled_reward + p * discount_rate - current_expect_reward
     expected_reward = p * discount_rate + scaled_reward
     return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, node.tspin, expected_reward, abs(temporal_difference) + ϵ)
@@ -70,7 +74,9 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
         end
 
         if learner.taget_update_count % learner.taget_update_cycle == 0
-            Flux.loadmodel!(learner.brain.target_model, learner.brain.main_model)
+            lock(learner.brain.targetlock) do
+                Flux.loadmodel!(learner.brain.target_model, learner.brain.main_model)
+            end
         end
         learner.taget_update_count += 1
         fit!(learner, ((prev_game_bord_array, minopos_array), prev_combo_array, prev_back_to_back_array, prev_tspin_array) |> gpu, expected_reward_array |> gpu), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
@@ -82,15 +88,14 @@ end
 
 function fit!(learner::Learner, x, y)
     model = learner.brain.main_model
-    local trainingloss
-    loss(x, y) = Flux.Losses.mse(model(x), y)
-    ∇model, _, _ = gradient(model, x, y) do m, x, y
-        trainingloss = Flux.Losses.mse(m(x), y)
-        trainingloss
+    trainingloss, (∇model,) = Flux.withgradient(model) do m
+        Flux.Losses.mse(m(x), y)
     end
     # CUDA.math_mode!(CUDA.DEFAULT_MATH; precision=:Float32)
     optim, model = Optimisers.update(learner.optim, model, ∇model)
-    learner.brain.main_model = model
+    lock(learner.brain.mainlock) do
+        learner.brain.main_model = model
+    end
     learner.optim = optim
     # CUDA.math_mode!(CUDA.FAST_MATH; precision=:Float16)
     trainingloss

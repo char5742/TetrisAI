@@ -46,7 +46,7 @@ function serch_can_set_space(
     shape=(24+2, 10+4)、1が置ける場所\n
     """
     space = ones(T, (20 + 4 + 2, 10 + 4))
-    space[1:end-2, 3:end-2] = copy(board)
+    space[1:end-2, 3:end-2] .= board
 
     # 重なってしまうマスを除く
     _check_overlap!(space, mino_block)
@@ -69,35 +69,36 @@ function get_node_list(
 )::Vector{Node}
     node_list = Vector{Node}()
     simulated_board = Set{Matrix{Int64}}()
+    start_position=Position(mino)
     for r in 1:4
         rotate_action_list = Vector{Action}()
         # 無回転
         if r == 1
             new_mino = mino
-            new_position = root_state.current_position
+            new_position = start_position
             check = true
             # 左回転
         elseif r == 2
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, 1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, 1)
             push!(rotate_action_list, Action(0, 0, 1))
             # 左2回転
         elseif r == 3
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, 1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, 1)
             new_mino, new_position, check = rotate(new_mino, new_position, root_state.current_game_board.binary, 1)
             push!(rotate_action_list, Action(0, 0, 1))
             push!(rotate_action_list, Action(0, 0, 1))
             #右回転
         else
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, -1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, -1)
             push!(rotate_action_list, Action(0, 0, -1))
         end
         if check
             can_set_place = serch_can_set_space(
                 new_mino.block, root_state.current_game_board.binary
             )
-             for (i, v) in pairs(can_set_place)
-                state = GameState(root_state)
+            for (i, v) in pairs(can_set_place)
                 if v == 1
+                    state = GameState(root_state)
                     y, x = Tuple(i)
                     x -= 2
                     action_list = Action[Action(0, 0, 0, hold, false), rotate_action_list...]
@@ -125,21 +126,21 @@ function get_node_list(
         # 無回転
         if r == 1
             new_mino = mino
-            new_position = root_state.current_position
+            new_position = start_position
             check = true
             # 左回転
         elseif r == 2
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, 1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, 1)
             push!(rotate_action_list, Action(0, 0, 1))
             # 左2回転
         elseif r == 3
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, 1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, 1)
             new_mino, new_position, check = rotate(new_mino, new_position, root_state.current_game_board.binary, 1)
             push!(rotate_action_list, Action(0, 0, 1))
             push!(rotate_action_list, Action(0, 0, 1))
             #右回転
         else
-            new_mino, new_position, check = rotate(mino, root_state.current_position, root_state.current_game_board.binary, -1)
+            new_mino, new_position, check = rotate(mino, start_position, root_state.current_game_board.binary, -1)
             push!(rotate_action_list, Action(0, 0, -1))
         end
         if check

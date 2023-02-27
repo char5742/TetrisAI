@@ -1,7 +1,4 @@
-import Flux: flatten
-using Flux
-using CUDA
-using MLUtils
+
 
 if CUDA.has_cuda()
     @info "CUDA is on"
@@ -12,7 +9,7 @@ cat3(args...) = cat(args..., dims=3)
 
 neg(x::AbstractArray{T}) where {T} = convert(T, -1.0) * x .+ convert(T, 1.0)
 
-combo_normalize(x) = x / 30.0
+combo_normalize(x) = x / 30.0f0
 
 
 """
@@ -23,7 +20,7 @@ back_to_back: size(1,B)
 arg: (bord_input_prev,combo_input,back_to_back)
 """
 function QNetwork(kernel_size::Int64, resblock_size::Int64)
-    bord = Chain(
+    board = Chain(
         Parallel(cat3, neg, neg),
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
@@ -37,7 +34,7 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64)
         flatten,
     )
     return Chain(
-        Parallel(vcat, bord, Chain(combo_normalize, leakyrelu), leakyrelu, leakyrelu),
+        Parallel(vcat, board, Chain(combo_normalize, leakyrelu), leakyrelu, leakyrelu),
         Dense(kernel_size + 3 => 1024, leakyrelu),
         Dense(1024 => 256, leakyrelu),
         Dense(256 => 1),

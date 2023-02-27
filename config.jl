@@ -11,6 +11,6 @@ const Config = _Config(
     load_params=false,
     kernel_size=128,
     res_blocks=4,
-    γ=0.997,
+    γ=0.93,
     ddqn_timing=400,
 )

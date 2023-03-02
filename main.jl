@@ -30,7 +30,7 @@ function ai(model, game_state::GameState, move_state::MoveState)
     start_time = time_ns()
     while !game_state.game_over_flag
         node_list = get_node_list(game_state)
-        node = select_node(model,node_list, game_state)
+        node = select_node(model, node_list, game_state)
         for action in node.action_list
             get_key_state(:VK_ESCAPE) == 1 && exit()
             if move_state.set_count > 0 && (action.x != 0 || action.y != 0 || action.rotate != 0) && move_state.set_safe_cout < 15

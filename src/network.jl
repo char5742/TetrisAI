@@ -24,19 +24,19 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64)
         Parallel(cat3, neg, neg),
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
-        leakyrelu,
+        swish,
         # [FusedMBConvBlock(kernel_size) for _ in 1:resblock_size]...,
         [ResNetBlock(kernel_size) for _ in 1:resblock_size]...,
         Conv((3, 3), kernel_size => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
-        leakyrelu,
+        swish,
         GlobalMeanPool(),
         flatten,
     )
     return Chain(
-        Parallel(vcat, board, Chain(combo_normalize, leakyrelu), leakyrelu, leakyrelu),
-        Dense(kernel_size + 3 => 1024, leakyrelu),
-        Dense(1024 => 256, leakyrelu),
+        Parallel(vcat, board, Chain(combo_normalize, swish), swish, swish),
+        Dense(kernel_size + 3 => 1024, swish),
+        Dense(1024 => 256, swish),
         Dense(256 => 1),
     )
 end
@@ -45,12 +45,12 @@ function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
         BatchNorm(n),
-        leakyrelu,
+        swish,
         Conv((3, 3), n => n, pad=SamePad()),
         BatchNorm(n),
     )
 
-    return Chain(SkipConnection(layers, +), leakyrelu)
+    return Chain(SkipConnection(layers, +), swish)
 end
 
 # 1_414_209, kernel_size=8, res_blocks=2,
@@ -59,12 +59,12 @@ function FusedMBConvBlock(n)
     layers = Chain(
         Conv((3, 3), n => scale * n, pad=SamePad()),
         BatchNorm(scale * n),
-        leakyrelu,
+        swish,
         se_block(scale * n),
         Conv((1, 1), scale * n => n, pad=SamePad()),
         BatchNorm(n),
     )
-    return Chain(SkipConnection(layers, +), leakyrelu)
+    return Chain(SkipConnection(layers, +), swish)
 end
 
 function MBConvBlock(n)
@@ -72,22 +72,22 @@ function MBConvBlock(n)
     layers = Chain(
         Conv((1, 1), n => scale * n, pad=SamePad()),
         BatchNorm(scale * n),
-        leakyrelu,
+        swish,
         DepthwiseConv((3, 3), scale * n => scale * n, pad=SamePad()),
         BatchNorm(scale * n),
-        leakyrelu,
+        swish,
         se_block(scale * n),
         Conv((1, 1), scale * n => n, pad=SamePad()),
         BatchNorm(n),
     )
-    return Chain(SkipConnection(layers, +), leakyrelu)
+    return Chain(SkipConnection(layers, +), swish)
 end
 
 
 function se_block(ch, ratio=4)
     layers = Chain(
         GlobalMeanPool(),
-        Conv((1, 1), ch => ch ÷ ratio, leakyrelu),
+        Conv((1, 1), ch => ch ÷ ratio, swish),
         Conv((1, 1), ch ÷ ratio => ch, sigmoid),
     )
     return Chain(SkipConnection(layers, .*))

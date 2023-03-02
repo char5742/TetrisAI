@@ -6,6 +6,7 @@ using Optimisers
 using Flux
 using CUDA
 using MLUtils
+using NNlib
 include("utils.jl")
 export sleep30fps, save_matrix,print_matrix
 include("component/Component.jl")

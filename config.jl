@@ -8,9 +8,9 @@ Base.@kwdef struct _Config
 end
 
 const Config = _Config(
-    load_params=false,
+    load_params=true,
     kernel_size=128,
     res_blocks=4,
-    γ=0.93,
+    γ=0.95,
     ddqn_timing=400,
 )

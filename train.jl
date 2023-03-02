@@ -5,6 +5,7 @@ using .TetrisAI
 using Flux, JLD2, Optimisers
 using ProgressBars
 using Printf
+using Random
 
 
 
@@ -19,21 +20,22 @@ function learning()
     main_model = main_model |> gpu
 
     target_model = QNetwork(Config.kernel_size, Config.res_blocks) |> gpu
-    optim = Optimisers.setup(Optimisers.RAdam(1e-6), main_model)
+    optim = Optimisers.setup(Optimisers.AdaBelief(1f-5), main_model)
     brain = Brain(main_model, target_model)
     agent = Agent(0, 1.0, brain)
     memory = Memory(batch_size * 16^2)
 
 
-    game_state = GameState()
+    game_state = GameState(MersenneTwister(1))
     while memory.index <= memory.capacity
+        current_step = 0
         while !game_state.game_over_flag
-            exp = onestep!(game_state, agent)
+            current_step += 1
+            exp = onestep!(game_state, agent, current_step)
             add!(memory, exp)
         end
-        game_state = GameState()
+        game_state = GameState(MersenneTwister(1))
     end
-    game_state = GameState()
     epsilon_list = Float64[0, 0, 0.01, 0.05, 0.1]
     for i in eachindex(epsilon_list)
         Threads.@spawn playing(Agent(i, epsilon_list[i], brain), memory)
@@ -53,12 +55,14 @@ function learning()
 end
 
 function playing(agent::Agent, memory::Memory)
-    game_state = GameState()
+    game_state = GameState(MersenneTwister(1))
     total_step = 0
     while true
         try
+            current_step = 0
             while !game_state.game_over_flag
-                exp = onestep!(game_state, agent)
+                current_step += 1
+                exp = onestep!(game_state, agent, current_step)
                 add!(memory, exp)
                 if agent.id == 1
                     sleep(0.2)
@@ -75,25 +79,29 @@ function playing(agent::Agent, memory::Memory)
                 end
             end
             total_step = 0
-            game_state = GameState()
+            game_state = GameState(MersenneTwister(1))
         catch
             GC.gc(true)
             total_step = 0
-            game_state = GameState()
+            game_state = GameState(MersenneTwister(1))
         end
     end
 
 end
 
-function onestep!(game_state::GameState, agent::Agent)::Experience
+function onestep!(game_state::GameState, agent::Agent, current_step::Int)::Experience
     node_list = get_node_list(game_state)
     node = select_node(agent, node_list, game_state)
     previous_state = GameState(game_state)
     for action in node.action_list
         action!(game_state, action)
     end
+
     exp = make_experience(agent.brain, previous_state, node, Config.γ)
     put_mino!(game_state)
+    if current_step == 250
+        game_end!(game_state)
+    end
     return exp
 end
 

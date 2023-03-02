@@ -27,7 +27,7 @@ function make_experience(
     if node.game_state.game_over_flag
         return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, node.tspin, -0.5, abs(-0.5 - current_expect_reward) + ϵ)
     end
-    reward = (node.game_state.score - state.score)*(node.tspin>0)
+    reward = node.game_state.score - state.score
     scaled_reward = rescaling_reward(reward)
     # 次の盤面の最大の価値を算出する
     node_list = get_node_list(node.game_state)
@@ -80,19 +80,29 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
         end
         learner.taget_update_count += 1
         fit!(learner, ((prev_game_bord_array, minopos_array), prev_combo_array, prev_back_to_back_array, prev_tspin_array) |> gpu, expected_reward_array |> gpu), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
-    catch
+    catch 
         GC.gc(true)
         0.0, 0.0, 0.0
     end
 end
 
 function fit!(learner::Learner, x, y)
+    # nonfreeze = rand(1:4)
+    # # 3層をフリーズする
+    # for i in 1:4
+    #     if i != nonfreeze
+    #         Optimisers.freeze!(learner.optim.layers[1].layers[1].layers[i+2])
+    #     end
+    # end
+
     model = learner.brain.main_model
     trainingloss, (∇model,) = Flux.withgradient(model) do m
         Flux.Losses.mse(m(x), y)
     end
     # CUDA.math_mode!(CUDA.DEFAULT_MATH; precision=:Float32)
     optim, model = Optimisers.update(learner.optim, model, ∇model)
+
+    # Optimisers.thaw!(optim)
     lock(learner.brain.mainlock) do
         learner.brain.main_model = model
     end

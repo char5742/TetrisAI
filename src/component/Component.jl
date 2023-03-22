@@ -1,6 +1,12 @@
+module Component
+using Tetris
 include("experience.jl")
+export Experience
 include("memory.jl")
+export Memory, add!, prioritized_sample!, sum_td
 include("node.jl")
-include("brain.jl")
+export Node
 include("reward.jl")
-using .Reward
+import .Reward: rescaling_reward
+export rescaling_reward
+end

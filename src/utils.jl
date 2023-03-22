@@ -18,3 +18,12 @@ function save_matrix(x::Matrix; filename="log.txt")
     end
 end
 
+
+function mino_to_array(mino::Union{Nothing, Mino})::Matrix{Int32}
+    res = zeros(Int32, 1, 7)
+    index = findfirst(m == mino for m in Tetris.TetrisMino.minos)
+    if !isnothing(index)
+        res[index] = 1
+    end
+    res
+end

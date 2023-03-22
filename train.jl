@@ -1,8 +1,8 @@
+ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"]="90%"
 include("config.jl")
 include("src/TetrisAI.jl")
 using Tetris
 using .TetrisAI
-using Flux, JLD2, Optimisers
 using ProgressBars
 using Printf
 using Random
@@ -10,23 +10,23 @@ using Random
 
 
 function learning()
-    batch_size = 16
     main_model = QNetwork(Config.kernel_size, Config.res_blocks)
     display(main_model)
     if Config.load_params
-        model = load("model/mymodel.jld2")["model"]
-        Flux.loadmodel!(main_model, model)
+        model = loadmodel("model/mymodel.jld2")
+        display(model)
+        loadmodel!(main_model, model)
     end
-    main_model = main_model |> gpu
 
-    target_model = QNetwork(Config.kernel_size, Config.res_blocks) |> gpu
-    optim = Optimisers.setup(Optimisers.AdaBelief(1f-5), main_model)
+    target_model = QNetwork(Config.kernel_size, Config.res_blocks) 
+    optim = create_optim(Config.learning_rate, main_model)
+    # Optimisers.freeze!(optim.layers[1].layers[1])
     brain = Brain(main_model, target_model)
     agent = Agent(0, 1.0, brain)
-    memory = Memory(batch_size * 16^2)
+    memory = Memory(Config.batchsize * Config.memoryscale)
 
 
-    game_state = GameState(MersenneTwister(1))
+    game_state = GameState()
     while memory.index <= memory.capacity
         current_step = 0
         while !game_state.game_over_flag
@@ -34,28 +34,28 @@ function learning()
             exp = onestep!(game_state, agent, current_step)
             add!(memory, exp)
         end
-        game_state = GameState(MersenneTwister(1))
+        game_state = GameState()
     end
-    epsilon_list = Float64[0, 0, 0.01, 0.05, 0.1]
-    for i in eachindex(epsilon_list)
-        Threads.@spawn playing(Agent(i, epsilon_list[i], brain), memory)
+
+    for i in eachindex(Config.epsilon_list)
+        Threads.@spawn playing(Agent(i, Config.epsilon_list[i], brain), memory)
     end
     learner = Learner(brain, Config.ddqn_timing, 0, optim)
     iter = ProgressBar(1:1000000)
     current_index = memory.index
     for i in iter
         if i % 2000 == 10
-            save("model/mymodel.jld2", "model", cpu(brain.main_model))
+            savemodel("model/mymodel.jld2", brain.main_model)
         end
         sleep(0.03)
-        loss, qmean, tspin = qlearn(learner, batch_size, prioritized_sample!(memory, batch_size; priority=1))# i < 10e3 ? 200 :
+        loss, qmean, tspin = qlearn(learner, Config.batchsize, prioritized_sample!(memory, Config.batchsize; priority=1))# i < 10e3 ? 200 :
         set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d, TDES: %9.4g, STEP: %2d", loss, qmean, tspin, sum_td(memory), memory.index - current_index)))
         current_index = memory.index
     end
 end
 
 function playing(agent::Agent, memory::Memory)
-    game_state = GameState(MersenneTwister(1))
+    game_state = GameState()
     total_step = 0
     while true
         try
@@ -79,11 +79,11 @@ function playing(agent::Agent, memory::Memory)
                 end
             end
             total_step = 0
-            game_state = GameState(MersenneTwister(1))
+            game_state = GameState()
         catch
             GC.gc(true)
             total_step = 0
-            game_state = GameState(MersenneTwister(1))
+            game_state = GameState()
         end
     end
 

@@ -10,17 +10,18 @@ using Random
 
 
 function learning()
-    main_model = QNetwork(Config.kernel_size, Config.res_blocks)
-    display(main_model)
+    main_model = QNetworkNextV2(Config.kernel_size, Config.res_blocks)
+    target_model = QNetworkNextV2(Config.kernel_size, Config.res_blocks) 
+    # value_model = TetrisAI.ValueNetwork(Config.kernel_size)
     if Config.load_params
         model = loadmodel("model/mymodel.jld2")
-        display(model)
-        loadmodel!(main_model, model)
-    end
 
-    target_model = QNetwork(Config.kernel_size, Config.res_blocks) 
+        loadmodel!(main_model[1][1], model[1][1])
+        loadmodel!(target_model, main_model)
+    end
+    display(main_model)
     optim = create_optim(Config.learning_rate, main_model)
-    # Optimisers.freeze!(optim.layers[1].layers[1])
+    TetrisAI.freeze_boardnet!(optim)
     brain = Brain(main_model, target_model)
     agent = Agent(0, 1.0, brain)
     memory = Memory(Config.batchsize * Config.memoryscale)

@@ -22,9 +22,9 @@ function select_node(model, modellock, node_list::Vector{Node}, state::GameState
     currentbord_array = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
     current_combo_array = [current_combo |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
-    # current_holdnext_array = repeat(vcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
+    current_holdnext_array = repeat(vcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     score_list = lock(modellock) do
-        predict(model, (currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array))
+        predict(model, (currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array))
     end
     @views index = argmax(score_list[1, :])
     return node_list[index]

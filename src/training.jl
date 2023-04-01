@@ -14,7 +14,7 @@ function make_experience(
     current_expect_reward = lock(brain.mainlock) do
         predict(brain.main_model,
             (vector2array([current_gameboard .|> Float32]), vector2array([minopos .|> Float32]),
-                [state.combo |> Float32;;], [state.back_to_back_flag |> Float32;;], [(node.tspin > 0) |> Float32;;]))[1] # reshape(holdnext, 6, 7, 1)
+                [state.combo |> Float32;;], [state.back_to_back_flag |> Float32;;], [(node.tspin > 0) |> Float32;;], reshape(holdnext, 6, 7, 1)))[1]
     end
     if node.game_state.game_over_flag
         return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, (node.tspin > 0), holdnext, -0.5, abs(-0.5 - current_expect_reward) + ϵ)
@@ -27,10 +27,10 @@ function make_experience(
         select_node(brain.main_model, brain.mainlock, node_list, node.game_state)
 
     max_node_minopos = generate_minopos(max_node.mino, max_node.position)
-    # max_node_holdnext = reshape(vcat([mino_to_array(mino) for mino in [node.game_state.hold_mino, node.game_state.mino_list[end-4:end]...]]...), 6, 7, 1)
+    max_node_holdnext = reshape(vcat([mino_to_array(mino) for mino in [node.game_state.hold_mino, node.game_state.mino_list[end-4:end]...]]...), 6, 7, 1)
     p = lock(brain.targetlock) do
         predict(brain.target_model,
-            (vector2array([node.game_state.current_game_board.binary .|> Float32]), vector2array([max_node_minopos .|> Float32]), [node.game_state.combo |> Float32;;], [node.game_state.back_to_back_flag |> Float32;;], [(max_node.tspin > 0) |> Float32;;],
+            (vector2array([node.game_state.current_game_board.binary .|> Float32]), vector2array([max_node_minopos .|> Float32]), [node.game_state.combo |> Float32;;], [node.game_state.back_to_back_flag |> Float32;;], [(max_node.tspin > 0) |> Float32;;], max_node_holdnext,
             ))[1]
     end
     temporal_difference = scaled_reward + p * discount_rate - current_expect_reward
@@ -75,8 +75,8 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
             end
         end
         learner.taget_update_count += 1
-        fit!(learner, ((prev_game_bord_array, minopos_array), prev_combo_array, prev_back_to_back_array, prev_tspin_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
-    catch
+        fit!(learner, ((prev_game_bord_array, minopos_array), prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
+    catch 
         GC.gc(true)
         0.0, 0.0, 0.0
     end

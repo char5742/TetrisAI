@@ -13,20 +13,36 @@ function select_node(agent::Agent, node_list::Vector{Node}, state::GameState)::N
 end
 
 function select_node(model, modellock, node_list::Vector{Node}, state::GameState)::Node
+    batch_size = 16
+    num_batches = ceil(Int, length(node_list) / batch_size)
     currentbord = state.current_game_board.binary
     current_combo = state.combo
     current_back_to_back = state.back_to_back_flag
     current_holdnext = [state.hold_mino, state.mino_list[end-4:end]...]
-    minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in node_list] |> vector2array
-    tspin_array = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in node_list] |> vector2array
-    currentbord_array = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
-    current_combo_array = [current_combo |> Float32 for _ in 1:length(node_list)] |> vector2array
-    current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
-    current_holdnext_array = repeat(vcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
-    score_list = lock(modellock) do
-        predict(model, (currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array))
+
+    score_list = Vector{Float32}(undef, length(node_list))
+
+    for batch_idx in 1:num_batches
+        batch_start = (batch_idx - 1) * batch_size + 1
+        batch_end = min(batch_idx * batch_size, length(node_list))
+        current_batch = node_list[batch_start:batch_end]
+        batch_length = length(current_batch)
+
+        minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in current_batch] |> vector2array
+        tspin_array = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in current_batch] |> vector2array
+        currentbord_array = [currentbord .|> Float32 for _ in 1:batch_length] |> vector2array
+        current_combo_array = [current_combo |> Float32 for _ in 1:batch_length] |> vector2array
+        current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:batch_length] |> vector2array
+        current_holdnext_array = repeat(vcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, batch_length)
+
+        batch_scores = lock(modellock) do
+            predict(model, (currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array))
+        end
+
+        @views score_list[batch_start:batch_end] = batch_scores[1, 1:batch_length]
     end
-    @views index = argmax(score_list[1, :])
+
+    index = argmax(score_list)
     return node_list[index]
 end
 

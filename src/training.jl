@@ -75,7 +75,7 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
             end
         end
         learner.taget_update_count += 1
-        fit!(learner, ((prev_game_bord_array, minopos_array), prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
+        fit!(learner, (prev_game_bord_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
     catch 
         GC.gc(true)
         0.0, 0.0, 0.0

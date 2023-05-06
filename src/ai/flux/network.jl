@@ -4,58 +4,74 @@ neg(x::AbstractArray{T}) where {T} = convert(T, -1.0) * x .+ convert(T, 1.0)
 
 combo_normalize(x) = x / 30.0f0
 
-
-"""
-盤面から特徴を抽出するネットワーク
-bord_input_prev: size(24,10, 1, B)  現在の盤面  
-minopos: size(24,10, 1, B) ミノの配置箇所  
-combo_input: size(1,B) コンボ数  
-back_to_back: size(1,B)  
-tspin: size(1, B)
-
-arg: ((bord_input_prev ,minopos), combo_input, back_to_back, tspin)  
-return: feature size(kernel_size)
-"""
-function BoardNet(kernel_size::Int64, resblock_size::Int64)
-    Chain(
-        Parallel(cat3, neg, neg),
-        Conv((3, 3), 2 => kernel_size; pad=SamePad()), # 1, 2
-        GroupNorm(kernel_size, 32), # 3, 4
-        swish,
-        # [FusedMBConvBlock(kernel_size) for _ in 1:resblock_size]...,
-        [ResNetBlock(kernel_size) for _ in 1:resblock_size]..., # 5~36
-        Conv((3, 3), kernel_size => kernel_size; pad=SamePad()), # 37, 38
-        GroupNorm(kernel_size, 32), # 39, 40
-        swish,
+struct BoardNet
+    conv1
+    gn1
+    resblocks
+    conv2
+    gn2
+    gmp
+end
+Flux.@functor BoardNet
+function BoardNet(kernel_size, resblock_size, output_size)
+    return BoardNet(
+        Conv((3, 3), 2 => kernel_size; pad=SamePad()),
+        GroupNorm(kernel_size, 32),
+        [Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size],
+        Conv((1, 1), kernel_size => output_size; pad=SamePad()),
+        GroupNorm(output_size, 32),
         GlobalMeanPool(),
-        flatten,
     )
 end
 
-"""
-bord_input_prev: size(24,10, B)  現在の盤面  
-minopos: size(24,10, B) ミノの配置箇所  
-combo_input: size(1,B) コンボ数  
-back_to_back: size(1,B)  
-tspin: size(1, B)  
-
-arg: ((bord_input_prev ,minopos), combo_input, back_to_back, tspin)  
-return: score  
-"""
-function QNetwork(kernel_size::Int64, resblock_size::Int64)
-    return Chain(
-        Parallel(vcat, BoardNet(kernel_size, resblock_size), Chain(combo_normalize, swish), swish, swish),
-        Dense(kernel_size + 3 => 1024, swish), # 41, 42
-        Dense(1024 => 256, swish),# 43, 44
-        Dense(256 => 1),# 45, 46
-    ) |> gpu
+function (m::BoardNet)((board, minopos))
+    z = cat3(neg(board), neg(minopos))
+    z = m.conv1(z)
+    z = m.gn1(z)
+    for resblock in m.resblocks
+        z = resblock(z)
+    end
+    z = m.conv2(z)
+    z = m.gn2(z)
+    z = swish(z)
+    z = m.gmp(z)
+    z = flatten(z)
+    z
 end
 
-function ValueNetwork(kernel_size::Int64)
-    return Chain(
-        Dense(kernel_size + 3 => 1024, swish), # 41, 42
-        Dense(1024 => 256, swish),# 43, 44
-        Dense(256 => 1),# 45, 46
+
+struct _QNetwork{B,S}
+    board_net::B
+    score_net::S
+end
+
+Flux.@functor _QNetwork
+Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net : m.score_net
+function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list))
+    # mino_vector = flatten(mino_list)
+    board_feature = m.board_net((board, minopos))
+    y = vcat(board_feature, combo_normalize(ren), btb, tspin)
+    m.score_net(y)
+end
+
+
+"""
+bord_input_prev: size(24,10, B)  現在の盤面
+minopos: size(24,10, B) ミノの配置箇所
+combo_input: size(1,B) コンボ数
+back_to_back: size(1,B)
+tspin: size(1, B)
+mino_list: size(6, 7, B) HOLD+NEXT
+
+arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
+return score  
+"""
+function QNetwork(kernel_size::Int64, resblock_size::Int64)
+    Chain(
+        _QNetwork(
+            BoardNet(kernel_size, resblock_size, 128),
+            ScoreNet(128+3),
+        )
     ) |> gpu
 end
 
@@ -92,9 +108,7 @@ return: score
 function ScoreNet(feature_size)
     Chain(
         Dense(feature_size => 1024, swish), # 41, 42
-        Dense(1024 => 1024, swish),# 43, 44
         Dense(1024 => 256, swish),# 43, 44
-        Dense(256 => 256, swish),# 43, 44
         Dense(256 => 1),# 45, 46
     )
 end
@@ -116,23 +130,83 @@ function QNetworkNextV2(kernel_size::Int64, resblock_size::Int64)
     )
     Chain(
         Parallel(vcat, BoardNet(kernel_size, resblock_size), Chain(combo_normalize, swish), swish, swish, mino_list),
-        ScoreNet(kernel_size+3+6*7),
+        ScoreNet(kernel_size + 3 + 6 * 7),
     ) |> gpu
 end
 
 
 
-struct TetrisNet{A,B,C,D,E,G}
-    board::A
-    minopos::B
-    combo::C
-    back_to_back::D
-    tspin::E
-    mino_list::G
+
+struct BoardNetV2
+    dense1
+    conv1
+    resblocks
+    conv2
+    gn
+    gmp
+end
+Flux.@functor BoardNetV2
+function BoardNetV2(kernel_size, resblock_size)
+    return BoardNetV2(
+        Chain(Dense(3 + 6 * 7 => kernel_size, swish), Dense(kernel_size => kernel_size, sigmoid)),
+        Conv((3, 3), 2 => kernel_size; pad=SamePad()),
+        [Chain(ResNetBlock(kernel_size),se_block(kernel_size)) for _ in 1:resblock_size],
+        Conv((3, 3), kernel_size => kernel_size; pad=SamePad()),
+        GroupNorm(kernel_size, 32),
+        GlobalMeanPool(),
+    )
 end
 
-Flux.@functor TetrisNet
+function (m::BoardNetV2)((board, minopos, ren, btb, tspin, mino_vector))
+    attention = m.dense1(vcat(combo_normalize(ren), btb, tspin, mino_vector))
+    attention = reshape(attention, 1, 1, size(attention)...)
+    z = cat3(neg(board), neg(minopos))
+    z = m.conv1(z)
+    for resblock in m.resblocks
+        z = resblock(z)
+    end
+    z = z .* attention
+    z = m.conv2(z)
+    z = m.gn(z)
+    z = swish(z)
+    z = m.gmp(z)
+    z = flatten(z)
+    z
+end
 
-function (m::TetrisNet)(x)
-    ((net.board(x[1]), net.minopos(x[1])), net.combo(x[2]), net.back_to_back(x[3]), net.tspin(x[4]), net.mino_list(x[5]))
+
+
+struct _QNetworkNextV3{B,S}
+    board_net::B
+    score_net::S
+end
+
+Flux.@functor _QNetworkNextV3
+Base.getindex(m::_QNetworkNextV3, i) = i == 1 ? m.board_net : m.score_net
+function (m::_QNetworkNextV3)((board, minopos, ren, btb, tspin, mino_list))
+    mino_vector = flatten(mino_list)
+    board_feature = m.board_net((board, minopos, combo_normalize(ren), btb, tspin, mino_vector))
+    # y = vcat(board_feature, combo_normalize(ren), btb, tspin, mino_vector)
+    m.score_net(board_feature)
+end
+
+
+"""
+bord_input_prev: size(24,10, B)  現在の盤面
+minopos: size(24,10, B) ミノの配置箇所
+combo_input: size(1,B) コンボ数
+back_to_back: size(1,B)
+tspin: size(1, B)
+mino_list: size(6, 7, B) HOLD+NEXT
+
+arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
+return score  
+"""
+function QNetworkNextV3(kernel_size::Int64, resblock_size::Int64)
+    Chain(
+        _QNetworkNextV3(
+            BoardNetV2(kernel_size, resblock_size),
+            ScoreNet(kernel_size),
+        )
+    ) |> gpu
 end

@@ -1,4 +1,4 @@
-ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"]="90%"
+ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
 include("config.jl")
 include("src/TetrisAI.jl")
 using Tetris
@@ -10,30 +10,36 @@ using Random
 
 
 function learning()
-    main_model = QNetworkNextV2(Config.kernel_size, Config.res_blocks)
-    target_model = QNetworkNextV2(Config.kernel_size, Config.res_blocks) 
-    # value_model = TetrisAI.ValueNetwork(Config.kernel_size)
+    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
+    target_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
+    display(main_model)
     if Config.load_params
         model = loadmodel("model/mymodel.jld2")
 
-        loadmodel!(main_model[1][1], model[1][1])
+        loadmodel!(main_model, model)
         loadmodel!(target_model, main_model)
     end
-    display(main_model)
+
     optim = create_optim(Config.learning_rate, main_model)
-    TetrisAI.freeze_boardnet!(optim)
+    # TetrisAI.freeze_boardnet!(optim)
     brain = Brain(main_model, target_model)
     agent = Agent(0, 1.0, brain)
     memory = Memory(Config.batchsize * Config.memoryscale)
 
 
     game_state = GameState()
+    initial_data_iter = ProgressBar(1:memory.capacity)
+    state = 1
     while memory.index <= memory.capacity
         current_step = 0
         while !game_state.game_over_flag
             current_step += 1
             exp = onestep!(game_state, agent, current_step)
             add!(memory, exp)
+            if memory.index > memory.capacity
+                break
+            end
+            (_, state) = iterate(initial_data_iter, state)
         end
         game_state = GameState()
     end

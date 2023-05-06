@@ -9,5 +9,5 @@ function savemodel(path::String, model)
 end
 
 function freeze_boardnet!(optim)
-    Optimisers.freeze!(optim.layers[1].layers[1])
+    Optimisers.freeze!(optim[1][1])
 end

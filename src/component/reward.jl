@@ -4,11 +4,11 @@ const reward_category = [-1, 0, 1, 2, 3, 4]
 export encode_reward, decode_reward, rescaling_reward, restoring_reward
 
 function rescaling_reward(v)
-    (sqrt(v / 200 + 1) - 1)
+    v / 600
 end
 
 function restoring_reward(v)
-    (sqrt(v / 200 + 1) - 1)
+    (sqrt(v / 600 + 1) - 1)
 end
 
 """

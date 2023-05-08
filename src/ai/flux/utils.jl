@@ -1,4 +1,4 @@
-loadmodel!(target, source) = Flux.loadmodel!(target, source)
+loadmodel!(target, source; to_cpu=false) = Flux.loadmodel!(target, to_cpu ? cpu(source) : source)
 
 function loadmodel(path::String)
     load(path)["model"]

@@ -24,13 +24,18 @@ function sample(m::Memory, batch_size)::Vector{Experience}
     end
 end
 
-function prioritized_sample!(m::Memory, batch_size; priority=1)::Vector{Experience}
+function prioritized_sample!(m::Memory, batch_size; priority=1)::Vector{Tuple{Int,Experience}}
     lock(m.lock) do
         index_list = StatsBase.sample(1:m.capacity, StatsBase.Weights([d.temporal_difference^priority for d in m.data]), batch_size, replace=false)
-        for index in index_list
-            m.data[index].temporal_difference *= 0.9
+        return [(i, m.data[i]) for i in index_list]
+    end
+end
+
+function update_temporal_difference(m::Memory, new_temporal_difference_list::Vector{Tuple{Int,Float32}})
+    lock(m.lock) do
+        for (i, td) in new_temporal_difference_list
+            m.data[i].temporal_difference = td
         end
-        return [m.data[i] for i in index_list]
     end
 end
 

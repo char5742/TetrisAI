@@ -5,8 +5,8 @@ include("utils.jl")
 export sleep30fps, save_matrix, print_matrix
 include("component/Component.jl")
 using .Component
-import .Component:Experience, Node, Memory, add!, prioritized_sample!, sum_td
-export Experience, Node, Memory, add!, prioritized_sample!, sum_td
+import .Component:Experience, Node, Memory, add!, prioritized_sample!, sum_td, update_temporal_difference
+export Experience, Node, Memory, add!, prioritized_sample!, sum_td, update_temporal_difference
 include("ai/flux/Flux.jl")
 using .AIFlux
 import .AIFlux:Learner, Brain, loadmodel!, loadmodel, savemodel, QNetwork, create_optim, QNetworkNextV2, predict

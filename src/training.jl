@@ -1,30 +1,36 @@
 
 
-
-function make_experience(
+function calc_expected_reward(
     brain::Brain,
     state::GameState,
     node::Node,
+    next_node_list::Vector{Node},
     discount_rate::Float64,
-)::Experience
+)::Tuple{Float64,Float64}
     ϵ = 1e-5
     current_gameboard = state.current_game_board.binary
     minopos = generate_minopos(node.mino, node.position)
     holdnext = vcat([mino_to_array(mino) for mino in [state.hold_mino, state.mino_list[end-4:end]...]]...)
+    current_gameboard_array = vector2array([current_gameboard .|> Float32])
+    current_minopos_array = vector2array([minopos .|> Float32])
+    current_combo_array = [state.combo |> Float32;;]
+    current_btb_array = [state.back_to_back_flag |> Float32;;]
+    current_tspin_array = [(node.tspin > 0) |> Float32;;]
+    current_holdnext_array = reshape(holdnext, 6, 7, 1)
+
     current_expect_reward = lock(brain.mainlock) do
         predict(brain.main_model,
-            (vector2array([current_gameboard .|> Float32]), vector2array([minopos .|> Float32]),
-                [state.combo |> Float32;;], [state.back_to_back_flag |> Float32;;], [(node.tspin > 0) |> Float32;;], reshape(holdnext, 6, 7, 1)))[1]
+            (current_gameboard_array, current_minopos_array,
+                current_combo_array, current_btb_array, current_tspin_array, current_holdnext_array))[1]
     end
     if node.game_state.game_over_flag
-        return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, (node.tspin > 0), holdnext, -0.5, abs(-0.5 - current_expect_reward) + ϵ)
+        return -0.5, abs(-0.5 - current_expect_reward) + ϵ
     end
     reward = node.game_state.score - state.score
     scaled_reward = rescaling_reward(reward)
     # 次の盤面の最大の価値を算出する
-    node_list = get_node_list(node.game_state)
     max_node =
-        select_node(brain.main_model, brain.mainlock, node_list, node.game_state)
+        select_node(brain.main_model, brain.mainlock, next_node_list, node.game_state)
 
     max_node_minopos = generate_minopos(max_node.mino, max_node.position)
     max_node_holdnext = reshape(vcat([mino_to_array(mino) for mino in [node.game_state.hold_mino, node.game_state.mino_list[end-4:end]...]]...), 6, 7, 1)
@@ -35,13 +41,13 @@ function make_experience(
     end
     temporal_difference = scaled_reward + p * discount_rate - current_expect_reward
     expected_reward = p * discount_rate + scaled_reward
-    return Experience(current_gameboard, minopos, state.combo, state.back_to_back_flag, (node.tspin > 0), holdnext, expected_reward, abs(temporal_difference) + ϵ)
+    return expected_reward, abs(temporal_difference) + ϵ
 end
 
-function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
+function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Experience}}, discount_rate)
     try
         # 行動前の状態
-        prev_game_bord_array = Array{Float32}(undef, 24, 10, 1, batch_size)
+        prev_game_board_array = Array{Float32}(undef, 24, 10, 1, batch_size)
         prev_combo_array = Array{Float32}(undef, 1, batch_size)
         prev_back_to_back_array = Array{Float32}(undef, 1, batch_size)
         prev_holdnext_array = Array{Float32}(undef, 6, 7, batch_size)
@@ -51,22 +57,24 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
         prev_tspin_array = Array{Float32}(undef, 1, batch_size)
         # 行動により得た報酬
         expected_reward_array = Array{Float32}(undef, 1, batch_size)
-        for (i, (;
-            prev_game_bord,
-            minopos,
-            prev_combo,
-            prev_back_to_back,
-            prev_tspin,
-            prev_holdnext,
-            expected_reward
-        )) in enumerate(exp)
-            prev_game_bord_array[:, :, 1, i] = prev_game_bord
-            minopos_array[:, :, 1, i] = minopos
-            prev_combo_array[i] = prev_combo
-            prev_back_to_back_array[i] = prev_back_to_back
-            prev_tspin_array[i] = prev_tspin
-            prev_holdnext_array[:, :, i] = prev_holdnext
+        # 経験の新しい価値
+        new_temporal_difference_list = Vector{Tuple{Int, Float32}}(undef,batch_size)
+
+        for (i, (id, (;
+            current_state,
+            selected_node,
+            next_node_list,
+            temporal_difference
+        ))) in enumerate(id_and_exp)
+            prev_game_board_array[:, :, 1, i] = current_state.current_game_board.binary
+            minopos_array[:, :, 1, i] = generate_minopos(selected_node.mino, selected_node.position)
+            prev_combo_array[i] = current_state.combo
+            prev_back_to_back_array[i] = current_state.back_to_back_flag
+            prev_tspin_array[i] = selected_node.tspin
+            prev_holdnext_array[:, :, i] =  vcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
+            (expected_reward, new_temporal_difference) = calc_expected_reward(learner.brain, current_state, selected_node, next_node_list, discount_rate)
             expected_reward_array[i] = expected_reward
+            new_temporal_difference_list[i] = (id,new_temporal_difference)
         end
 
         if learner.taget_update_count % learner.taget_update_cycle == 0
@@ -75,8 +83,9 @@ function qlearn(learner::Learner, batch_size, exp::Vector{Experience})
             end
         end
         learner.taget_update_count += 1
-        fit!(learner, (prev_game_bord_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
-    catch 
+        fit!(learner, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array), new_temporal_difference_list
+    catch e
+        rethrow(e)
         GC.gc(true)
         0.0, 0.0, 0.0
     end

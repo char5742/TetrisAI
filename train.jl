@@ -3,7 +3,7 @@ using Distributed
 actors = 3
 learners = 1
 addprocs(actors + learners, exeflags="--project=$(Base.active_project())")
-ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "30%"
+ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
 @everywhere include("config.jl")
 @everywhere include("src/TetrisAI.jl")
 @everywhere using Tetris
@@ -11,29 +11,35 @@ ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "30%"
 @everywhere using ProgressBars
 @everywhere using Printf
 @everywhere using Random
+@everywhere using Flux
 
 
 function main()
-    exp_channel = RemoteChannel(() -> Channel{Experience}(2^4))
+    exp_channel = RemoteChannel(() -> Channel{Experience}(2^10))
+    state_channel_list = [RemoteChannel(() -> Channel(1)) for _ in 1:actors]
     @sync begin
         for i in 1:actors
-            @spawn actor(exp_channel, i)
+            @spawn actor(exp_channel, state_channel_list[i], i)
         end
         for i in 1:learners
-             learner(exp_channel)
+            learner(exp_channel, state_channel_list)
         end
     end
 end
 
-@everywhere function learner(exp_channel::RemoteChannel)
+@everywhere function learner(exp_channel::RemoteChannel, state_channel_list::Vector{RemoteChannel{Channel{Any}}})
     # モデル読み込み
     main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
     target_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
     if Config.load_params
-        model = loadmodel("model/mymodel.jld2")
-
-        loadmodel!(main_model, model)
-        loadmodel!(target_model, main_model)
+        loadmodel_source!(main_model, "model/mymodel.jld2")
+        loadmodel_source!(target_model, "model/mymodel.jld2")
+        tmp = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
+        loadmodel_source!(tmp, "model/mymodel.jld2")
+        for state_channel in state_channel_list
+            put!(state_channel, tmp)
+        end
+        @info "load model"
     end
 
     # 学習パラメータ取得
@@ -68,10 +74,18 @@ end
         if i % 20 == 0
             try
                 savemodel("model/mymodel.jld2", brain.main_model)
+                tmp = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
+                loadmodel!(tmp, brain.main_model)
+                for state_channel in state_channel_list
+                    # 空であれば補充
+                    if !isready(state_channel)
+                        put!(state_channel, tmp)
+                    end
+                end
             catch e
                 @warn e
             end
-            
+
         end
         loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, prioritized_sample!(memory, Config.batchsize; priority=1), Config.γ)# i < 10e3 ? 200 :
         update_temporal_difference(memory, new_temporal_difference_list)
@@ -82,25 +96,17 @@ end
     end
 end
 
-@everywhere function actor(exp_channel::RemoteChannel, id::Int)
+@everywhere function actor(exp_channel::RemoteChannel, state_channel::RemoteChannel, id::Int)
     # モデル読み込み
-    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
-    target_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
-    if Config.load_params
-        model = loadmodel("model/mymodel.jld2")
-
-        loadmodel!(main_model, model)
-        loadmodel!(target_model, main_model)
-    end
-
+    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
     # TetrisAI.freeze_boardnet!(optim)
-    brain = Brain(main_model, target_model)
-    playing(Agent(id, Config.epsilon_list[id], brain), exp_channel)
+    brain = Brain(main_model, main_model)
+    playing(Agent(id, Config.epsilon_list[id], brain), exp_channel, state_channel)
 end
 
 
 
-@everywhere function playing(agent::Agent, exp_channel::RemoteChannel)
+@everywhere function playing(agent::Agent, exp_channel::RemoteChannel, state_channel::RemoteChannel)
     game_state = GameState()
     total_step = 0
     while true
@@ -127,13 +133,15 @@ end
             total_step = 0
             game_state = GameState()
         catch e
-            @error e
+            @error exception = (e, catch_backtrace())
             rethrow(e)
             GC.gc(true)
             total_step = 0
             game_state = GameState()
         end
-        loadmodel!(agent.brain.main_model, loadmodel("model/mymodel.jld2"))
+        if isready(state_channel)
+            loadmodel!(agent.brain.main_model, take!(state_channel))
+        end
     end
 
 end

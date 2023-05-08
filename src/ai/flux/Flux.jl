@@ -11,9 +11,9 @@ end
 include("../brain.jl")
 export Learner, Brain
 include("utils.jl")
-export loadmodel!, loadmodel, savemodel, freeze_boardnet!
+export loadmodel!, loadmodel, savemodel, freeze_boardnet!, loadmodel_source!
 include("network.jl")
-export QNetwork, QNetworkNextV2, ValueNetwork
+export QNetwork, QNetworkNextV2
 include("predict.jl")
 export predict, vector2array
 include("training.jl")

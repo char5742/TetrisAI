@@ -9,8 +9,8 @@ import .Component:Experience, Node, Memory, add!, prioritized_sample!, sum_td, u
 export Experience, Node, Memory, add!, prioritized_sample!, sum_td, update_temporal_difference
 include("ai/flux/Flux.jl")
 using .AIFlux
-import .AIFlux:Learner, Brain, loadmodel!, loadmodel, savemodel, QNetwork, create_optim, QNetworkNextV2, predict
-export Learner, Brain, loadmodel!, loadmodel, savemodel, QNetwork, create_optim, QNetworkNextV2, predict
+import .AIFlux:Learner, Brain, loadmodel!, loadmodel, savemodel, QNetwork, create_optim, QNetworkNextV2, predict, loadmodel_source!
+export Learner, Brain, loadmodel!, loadmodel, savemodel, QNetwork, create_optim, QNetworkNextV2, predict, loadmodel_source!
 include("analyzer.jl")
 export get_node_list, generate_minopos
 include("agent.jl")

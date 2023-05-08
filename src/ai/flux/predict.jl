@@ -4,19 +4,32 @@
 function predict(model,
     (board, minopos, combo, btb, tspin)::Tuple{Array{T,4},Array{T,4},Array{T,2},Array{T,2},Array{T,2}}
 ) where {T}
-    model((board, minopos, combo, btb, tspin) |> gpu) |> cpu
+    if (isa(Flux.state(model).layers[1].board_net[1].weight, CUDA.CuArray))
+        model((board, minopos, combo, btb, tspin) |> gpu) |> cpu
+    else
+        model((board, minopos, combo, btb, tspin)) |> cpu
+    end
 end
 
 function predict(model,
     (board, minopos, combo, btb, tspin, holdnext)::Tuple{Array{T,4},Array{T,4},Array{T,2},Array{T,2},Array{T,2},Array{T,3}}
 ) where {T}
-    model(((board, minopos), combo, btb, tspin, holdnext) |> gpu) |> cpu
+    if (isa(Flux.state(model).layers[1].board_net[1].weight, CUDA.CuArray))
+        model(((board, minopos), combo, btb, tspin, holdnext) |> gpu) |> cpu
+    else
+        model(((board, minopos), combo, btb, tspin, holdnext)) |> cpu
+    end
+
 end
 
 function predict(model,
     (board, minopos, combo, btb, tspin, holdnext)::Tuple{Array{T,4},Array{T,4},Array{T,2},Array{T,2},Array{T,2},Array{T,3}}
 ) where {T}
-    model((board, minopos, combo, btb, tspin, holdnext) |> gpu) |> cpu
+    if (isa(Flux.state(model).layers[1].board_net[1].weight, CUDA.CuArray))
+        model((board, minopos, combo, btb, tspin, holdnext) |> gpu) |> cpu
+    else
+        model((board, minopos, combo, btb, tspin, holdnext)) |> cpu
+    end
 end
 
 

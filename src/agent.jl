@@ -13,7 +13,7 @@ function select_node(agent::Agent, node_list::Vector{Node}, state::GameState)::N
 end
 
 function select_node(model, modellock, node_list::Vector{Node}, state::GameState)::Node
-    batch_size = 1
+    batch_size = 16
     num_batches = ceil(Int, length(node_list) / batch_size)
     currentbord = state.current_game_board.binary
     current_combo = state.combo

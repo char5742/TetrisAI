@@ -6,14 +6,16 @@ function fit!(learner::Learner, x, y)
     # end
     x = x |> gpu
     y = y |> gpu
-    lock(learner.brain.mainlock) do
+    trainingloss = lock(learner.brain.mainlock) do
         trainingloss, (∇model,) = Flux.withgradient(learner.brain.main_model) do m
             Flux.Losses.mse(m(x), y)
         end
-
         Optimisers.update!(learner.optim, learner.brain.main_model, ∇model)
         trainingloss
     end
+    x = nothing
+    y = nothing
+    trainingloss
 end
 
 create_optim(learning_rate, model) = Optimisers.setup(Optimisers.AdaBelief(learning_rate), model)

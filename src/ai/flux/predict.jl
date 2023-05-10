@@ -11,22 +11,15 @@ function predict(model,
     end
 end
 
-function predict(model,
-    (board, minopos, combo, btb, tspin, holdnext)::Tuple{Array{T,4},Array{T,4},Array{T,2},Array{T,2},Array{T,2},Array{T,3}}
-) where {T}
-    if (isa(Flux.state(model).layers[1].board_net[1].weight, CUDA.CuArray))
-        model(((board, minopos), combo, btb, tspin, holdnext) |> gpu) |> cpu
-    else
-        model(((board, minopos), combo, btb, tspin, holdnext)) |> cpu
-    end
-
-end
 
 function predict(model,
     (board, minopos, combo, btb, tspin, holdnext)::Tuple{Array{T,4},Array{T,4},Array{T,2},Array{T,2},Array{T,2},Array{T,3}}
 ) where {T}
     if (isa(Flux.state(model).layers[1].board_net[1].weight, CUDA.CuArray))
-        model((board, minopos, combo, btb, tspin, holdnext) |> gpu) |> cpu
+        data = (board, minopos, combo, btb, tspin, holdnext) |> gpu
+        response = model(data) |> cpu
+        data = nothing
+        return response
     else
         model((board, minopos, combo, btb, tspin, holdnext)) |> cpu
     end

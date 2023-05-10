@@ -84,9 +84,8 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         end
         learner.taget_update_count += 1
         fit!(learner, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array), new_temporal_difference_list
-    catch e
-        rethrow(e)
+    catch
         GC.gc(true)
-        0.0, 0.0, 0.0
+        0.0, 0.0, 0.0, Vector{Tuple{Int, Float32}}()
     end
 end

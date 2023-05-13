@@ -2,7 +2,7 @@
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "39ad8dfd6a1d01c93c71a160a9f3766a57e4aeed"
+project_hash = "50828aeb1bd9605120b34eaab120c8104905fa3a"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -150,12 +150,6 @@ git-tree-sha1 = "c6d890a52d2c4d55d326439580c3b8d0875a77d9"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 version = "1.15.7"
 
-[[deps.ChangesOfVariables]]
-deps = ["LinearAlgebra", "Test"]
-git-tree-sha1 = "f84967c4497e0e1955f9a582c232b02847c5f589"
-uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-version = "0.1.7"
-
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
 git-tree-sha1 = "d730914ef30a06732bdd9f763f6cc32e92ffbff1"
@@ -223,6 +217,12 @@ deps = ["Serialization", "Sockets"]
 git-tree-sha1 = "b306df2650947e9eb100ec125ff8c65ca2053d30"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
 version = "2.1.1"
+
+[[deps.Conda]]
+deps = ["Downloads", "JSON", "VersionParsing"]
+git-tree-sha1 = "e32a90da027ca45d84678b826fffd3110bb3fc90"
+uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+version = "1.8.0"
 
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
@@ -712,12 +712,16 @@ deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
 git-tree-sha1 = "0a1b7c2863e44523180fdb3146534e265a91870b"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
 version = "0.3.23"
-weakdeps = ["ChainRulesCore", "ChangesOfVariables", "InverseFunctions"]
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
     LogExpFunctionsChangesOfVariablesExt = "ChangesOfVariables"
     LogExpFunctionsInverseFunctionsExt = "InverseFunctions"
+
+    [deps.LogExpFunctions.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    ChangesOfVariables = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -733,6 +737,61 @@ deps = ["JuliaInterpreter"]
 git-tree-sha1 = "60168780555f3e663c536500aa790b6368adc02a"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "2.3.0"
+
+[[deps.Lux]]
+deps = ["Adapt", "ChainRulesCore", "Functors", "LinearAlgebra", "LuxCUDA", "LuxCore", "LuxLib", "Markdown", "NNlib", "Optimisers", "Random", "Requires", "Setfield", "SparseArrays", "Statistics", "TruncatedStacktraces"]
+git-tree-sha1 = "a5c1691167a1ab915310f434d8de69bedcae6344"
+uuid = "b2108857-7c20-44ae-9111-449ecde12c47"
+version = "0.4.53"
+
+    [deps.Lux.extensions]
+    LuxComponentArraysExt = "ComponentArrays"
+    LuxComponentArraysReverseDiffExt = ["ComponentArrays", "ReverseDiff"]
+    LuxComponentArraysTrackerExt = ["ComponentArrays", "Tracker"]
+    LuxComponentArraysZygoteExt = ["ComponentArrays", "Zygote"]
+    LuxFillArraysExt = "FillArrays"
+    LuxFluxTransformExt = "Flux"
+    LuxTrackerExt = "Tracker"
+    LuxZygoteExt = "Zygote"
+
+    [deps.Lux.weakdeps]
+    ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
+    FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
+    Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
+    Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[[deps.LuxCUDA]]
+deps = ["CUDA", "NNlibCUDA", "Reexport", "cuDNN"]
+git-tree-sha1 = "1c5470a996cdf15beb737f4739797e4e5f7a46f5"
+uuid = "d0bbae9a-e099-4d5b-a835-1c6931763bda"
+version = "0.1.2"
+
+[[deps.LuxCore]]
+deps = ["Functors", "Random", "Setfield"]
+git-tree-sha1 = "094581e618e8ef57c7610eedd4ef56818197d32a"
+uuid = "bb33d45b-7691-41d6-9220-0943567d0623"
+version = "0.1.3"
+
+[[deps.LuxLib]]
+deps = ["ChainRulesCore", "KernelAbstractions", "Markdown", "NNlib", "Random", "Reexport", "Requires", "Statistics"]
+git-tree-sha1 = "2be33a984180f2827220307fb2c269f1b19219e4"
+uuid = "82251201-b29d-42c6-8e01-566dec8acb11"
+version = "0.2.1"
+
+    [deps.LuxLib.extensions]
+    LuxLibForwardDiffExt = "ForwardDiff"
+    LuxLibLuxCUDAExt = "LuxCUDA"
+    LuxLibLuxCUDATrackerExt = ["LuxCUDA", "Tracker"]
+    LuxLibReverseDiffExt = "ReverseDiff"
+    LuxLibTrackerExt = "Tracker"
+
+    [deps.LuxLib.weakdeps]
+    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+    LuxCUDA = "d0bbae9a-e099-4d5b-a835-1c6931763bda"
+    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
 [[deps.MLStyle]]
 git-tree-sha1 = "bc38dff0548128765760c79eb7388a4b37fae2c8"
@@ -977,6 +1036,12 @@ git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
 uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 version = "0.1.4"
 
+[[deps.PyCall]]
+deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
+git-tree-sha1 = "62f417f6ad727987c755549e9cd88c46578da562"
+uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+version = "1.95.1"
+
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
 git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
@@ -1217,6 +1282,12 @@ git-tree-sha1 = "c42fa452a60f022e9e087823b47e5a5f8adc53d5"
 uuid = "28d57a85-8fef-5791-bfe6-a80928e7c999"
 version = "0.4.75"
 
+[[deps.TruncatedStacktraces]]
+deps = ["InteractiveUtils", "MacroTools", "Preferences"]
+git-tree-sha1 = "7bc1632a4eafbe9bd94cf1a784a9a4eb5e040a91"
+uuid = "781d530d-4396-4725-bb49-402e4bee1e77"
+version = "1.3.0"
+
 [[deps.URIs]]
 git-tree-sha1 = "074f993b0ca030848b897beff716d93aca60f06a"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
@@ -1250,6 +1321,11 @@ version = "0.1.2"
 git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
+
+[[deps.VersionParsing]]
+git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
+uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
+version = "1.3.0"
 
 [[deps.Wayland_jll]]
 deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]

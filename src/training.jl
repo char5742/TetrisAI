@@ -58,7 +58,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         # 行動により得た報酬
         expected_reward_array = Array{Float32}(undef, 1, batch_size)
         # 経験の新しい価値
-        new_temporal_difference_list = Vector{Tuple{Int, Float32}}(undef,batch_size)
+        new_temporal_difference_list = Vector{Tuple{Int,Float32}}(undef, batch_size)
 
         for (i, (id, (;
             current_state,
@@ -71,21 +71,23 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
             prev_combo_array[i] = current_state.combo
             prev_back_to_back_array[i] = current_state.back_to_back_flag
             prev_tspin_array[i] = selected_node.tspin
-            prev_holdnext_array[:, :, i] =  vcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
+            prev_holdnext_array[:, :, i] = vcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
             (expected_reward, new_temporal_difference) = calc_expected_reward(learner.brain, current_state, selected_node, next_node_list, discount_rate)
             expected_reward_array[i] = expected_reward
-            new_temporal_difference_list[i] = (id,new_temporal_difference)
+            new_temporal_difference_list[i] = (id, new_temporal_difference)
         end
 
         if learner.taget_update_count % learner.taget_update_cycle == 0
             lock(learner.brain.targetlock) do
-                loadmodel!(learner.brain.target_model, learner.brain.main_model)
+                learner.brain.target_model.ps = learner.brain.main_model.ps
+                learner.brain.target_model.st = learner.brain.main_model.st
             end
         end
         learner.taget_update_count += 1
         fit!(learner, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array), new_temporal_difference_list
-    catch
+    catch e
+        rethrow(e)
         GC.gc(true)
-        0.0, 0.0, 0.0, Vector{Tuple{Int, Float32}}()
+        0.0, 0.0, 0.0, Vector{Tuple{Int,Float32}}()
     end
 end

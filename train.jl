@@ -1,6 +1,6 @@
 using Distributed
 
-actors = 3
+actors = 5
 learners = 1
 addprocs(actors + learners, exeflags="--project=$(Base.active_project())")
 ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
@@ -11,7 +11,7 @@ ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
 @everywhere using ProgressBars
 @everywhere using Printf
 @everywhere using Random
-@everywhere using Flux
+@everywhere using Lux
 
 
 function main()
@@ -29,23 +29,21 @@ end
 
 @everywhere function learner(exp_channel::RemoteChannel, state_channel_list::Vector{RemoteChannel{Channel{Any}}})
     # モデル読み込み
-    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
-    target_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
+    model, ps, st = create_model(Config.kernel_size, Config.res_blocks)
     if Config.load_params
-        loadmodel_source!(main_model, "model/mymodel.jld2")
-        loadmodel_source!(target_model, "model/mymodel.jld2")
-        tmp = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
-        loadmodel_source!(tmp, "model/mymodel.jld2")
+        _, ps, st = loadmodel("model/mymodel.jld2")
         for state_channel in state_channel_list
-            put!(state_channel, tmp)
+            put!(state_channel, ps)
         end
+        ps = ps |> gpu
+        st = st |> gpu
         @info "load model"
     end
 
     # 学習パラメータ取得
-    optim = create_optim(Config.learning_rate, main_model)
+    optim = create_optim(Config.learning_rate, ps)
     # TetrisAI.freeze_boardnet!(optim)
-    brain = Brain(main_model, target_model)
+    brain = Brain(Model(model, ps, st), Model(model, ps, st))
     memory = Memory(Config.batchsize * Config.memoryscale)
 
     learner = Learner(brain, Config.ddqn_timing, 0, optim)
@@ -74,12 +72,11 @@ end
         if i % 20 == 0
             try
                 savemodel("model/mymodel.jld2", brain.main_model)
-                tmp = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
-                loadmodel!(tmp, brain.main_model)
+                tmp_ps = brain.main_model.ps |> cpu
                 for state_channel in state_channel_list
                     # 空であれば補充
                     if !isready(state_channel)
-                        put!(state_channel, tmp)
+                        put!(state_channel, tmp_ps)
                     end
                 end
             catch e
@@ -98,8 +95,8 @@ end
 
 @everywhere function actor(exp_channel::RemoteChannel, state_channel::RemoteChannel, id::Int)
     # モデル読み込み
-    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks; use_gpu=false)
-    # TetrisAI.freeze_boardnet!(optim)
+    model, ps, st = create_model(Config.kernel_size, Config.res_blocks; use_gpu=false)
+    main_model = Model(model, ps, st)
     brain = Brain(main_model, main_model)
     playing(Agent(id, Config.epsilon_list[id], brain), exp_channel, state_channel)
 end
@@ -140,7 +137,7 @@ end
             game_state = GameState()
         end
         if isready(state_channel)
-            loadmodel!(agent.brain.main_model, take!(state_channel))
+            agent.brain.main_model.ps = take!(state_channel)
         end
     end
 

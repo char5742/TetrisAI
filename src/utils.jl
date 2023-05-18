@@ -20,7 +20,7 @@ end
 
 
 function mino_to_array(mino::Union{Nothing, Mino})::Matrix{Float32}
-    res = zeros(Float32, 1, 7)
+    res = zeros(Float32, 7, 1)
     index = findfirst(m == mino for m in Tetris.TetrisMino.minos)
     if !isnothing(index)
         res[index] = 1

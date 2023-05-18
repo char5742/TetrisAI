@@ -56,7 +56,7 @@ minopos: size(24,10, B) ミノの配置箇所
 combo_input: size(1,B) コンボ数
 back_to_back: size(1,B)
 tspin: size(1, B)
-mino_list: size(6, 7, B) HOLD+NEXT
+mino_list: size(7, 6, B) HOLD+NEXT
 
 arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
 return score  

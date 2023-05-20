@@ -61,14 +61,7 @@ mino_list: size(7, 6, B) HOLD+NEXT
 arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
 return score  
 """
-function QNetwork(kernel_size::Int64, resblock_size::Int64; use_gpu::Bool=true)
-    use_gpu ?
-    (Chain(
-        _QNetwork(
-            BoardNet(kernel_size, resblock_size, 128),
-            ScoreNet(128 + 3),
-        )
-    ) |> gpu) :
+function QNetwork(kernel_size::Int64, resblock_size::Int64)
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, 128),

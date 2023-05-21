@@ -4,12 +4,12 @@ neg(x::AbstractArray{T}) where {T} = convert(T, -1.0) * x .+ convert(T, 1.0)
 
 combo_normalize(x) = x / 30.0f0
 
-struct BoardNet <: Lux.AbstractExplicitContainerLayer{(:conv1, :gn1, :resblocks, :conv2, :gn2, :gmp)}
+struct BoardNet <: Lux.AbstractExplicitContainerLayer{(:conv1, :norm1, :resblocks, :conv2, :norm2, :gmp)}
     conv1
-    gn1
+    norm1
     resblocks
     conv2
-    gn2
+    norm2
     gmp
 end
 function BoardNet(kernel_size, resblock_size, output_size)
@@ -24,13 +24,16 @@ function BoardNet(kernel_size, resblock_size, output_size)
 end
 function (m::BoardNet)((board, minopos), ps, st)
     z = cat3(neg(board), neg(minopos))
-    z, _ = m.conv1(z, ps[1], st[1])
-    z, _ = m.gn1(z, ps[2], st[2])
-    z, _ = m.resblocks(z, ps[3], st[3])
-    z, _ = m.conv2(z, ps[4], st[4])
-    z, _ = m.gn2(z, ps[5], st[5])
+    z, _ = m.conv1(z, ps.conv1, st.conv1)
+    z, st_ = m.norm1(z, ps.norm1, st.norm1)
+    @set! st.norm1 = st_
+    z, st_ = m.resblocks(z, ps.resblocks, st.resblocks)
+    @set! st.resblocks = st_
+    z, _ = m.conv2(z, ps.conv2, st.conv2)
+    z, st_ = m.norm2(z, ps.norm2, st.norm2)
+    @set! st.norm2 = st_
     z = swish(z)
-    z, _ = m.gmp(z, ps[6], st[6])
+    z, _ = m.gmp(z, ps.gmp, st.gmp)
     z = flatten(z)
     z, st
 end
@@ -43,9 +46,11 @@ end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     # mino_vector = flatten(mino_list)
-    board_feature, _ = m.board_net((board, minopos), ps[1], st[1])
+    board_feature, st_ = m.board_net((board, minopos), ps.board_net, st.board_net)
+    @set! st.board_net = st_
     y = vcat(board_feature, combo_normalize(ren), btb, tspin)
-    score, _ = m.score_net(y, ps[2], st[2])
+    score, st_ = m.score_net(y, ps.score_net, st.score_net)
+    @set! st.score_net = st_
     score, st
 end
 

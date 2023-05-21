@@ -1,6 +1,6 @@
 module AILux
 using CUDA
-using Lux, NNlib, MLUtils, Zygote
+using Lux, NNlib, MLUtils, Zygote, Setfield
 using JLD2, Optimisers
 using Statistics, Random
 function __init__()

@@ -15,10 +15,10 @@ end
 function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        GroupNorm(kernel_size, 32),
+        BatchNorm(kernel_size),
         Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
         Conv((1, 1), kernel_size => output_size; pad=SamePad()),
-        GroupNorm(output_size, 32),
+        BatchNorm(output_size),
         GlobalMeanPool(),
     )
 end
@@ -38,7 +38,6 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, st
 end
 
-
 struct _QNetwork <: Lux.AbstractExplicitContainerLayer{(:board_net, :score_net,)}
     board_net
     score_net
@@ -56,8 +55,8 @@ end
 
 
 """
-bord_input_prev: size(24,10, B)  現在の盤面
-minopos: size(24,10, B) ミノの配置箇所
+bord_input_prev: size(24,10, 1, B)  現在の盤面
+minopos: size(24,10, 1, B) ミノの配置箇所
 combo_input: size(1,B) コンボ数
 back_to_back: size(1,B)
 tspin: size(1, B)
@@ -69,8 +68,8 @@ return score
 function QNetwork(kernel_size::Int64, resblock_size::Int64)
     Chain(
         _QNetwork(
-            BoardNet(kernel_size, resblock_size, 128),
-            ScoreNet(128 + 3),
+            BoardNet(kernel_size, resblock_size, 64),
+            ScoreNet(64 + 3),
         )
     )
 end
@@ -79,10 +78,10 @@ end
 function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
-        GroupNorm(n, 32),
+        BatchNorm(n),
         swish,
         Conv((3, 3), n => n, pad=SamePad()),
-        GroupNorm(n, 32),
+        BatchNorm(n),
     )
 
     return Chain(SkipConnection(layers, +), swish)

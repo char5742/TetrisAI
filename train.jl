@@ -30,6 +30,7 @@ end
 @everywhere function learner(exp_channel::RemoteChannel, state_channel_list::Vector{RemoteChannel{Channel{Any}}})
     # モデル読み込み
     model, ps, st = create_model(Config.kernel_size, Config.res_blocks)
+    display(model)
     if Config.load_params
         _, ps, st = loadmodel("model/mymodel.jld2")
         for state_channel in state_channel_list
@@ -136,6 +137,7 @@ end
             total_step = 0
             game_state = GameState()
         end
+        GC.gc()
         if isready(state_channel)
             agent.brain.main_model.ps = take!(state_channel)
         end

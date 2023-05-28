@@ -16,7 +16,7 @@ function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
-        Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
+        Chain([ResNetBlock(kernel_size) for _ in 1:resblock_size]),
         Conv((1, 1), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size),
         GlobalMeanPool(),
@@ -27,6 +27,7 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, _ = m.conv1(z, ps.conv1, st.conv1)
     z, st_ = m.norm1(z, ps.norm1, st.norm1)
     @set! st.norm1 = st_
+    z = swish(z)
     z, st_ = m.resblocks(z, ps.resblocks, st.resblocks)
     @set! st.resblocks = st_
     z, _ = m.conv2(z, ps.conv2, st.conv2)

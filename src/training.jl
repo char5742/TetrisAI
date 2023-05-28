@@ -12,7 +12,7 @@ function calc_expected_rewards(
     calc_size = length(node_list)
 
     # 次の盤面の最大の価値を算出する
-     max_node_list =
+    max_node_list =
         select_node_list(brain.main_model, brain.mainlock, next_node_list_list, [node.game_state for node in node_list])
 
     node_currentboard_array = [node.game_state.current_game_board.binary .|> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
@@ -27,7 +27,7 @@ function calc_expected_rewards(
             ))
     response = Vector{Tuple{Float64,Float64}}(undef, calc_size)
     index = 1
-     for i in 1:calc_size
+    for i in 1:calc_size
         current_expect_reward = current_expect_reward_array[i]
         node = node_list[i]
         prev_score = prev_score_list[i]
@@ -90,7 +90,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
                 (prev_game_board_array, minopos_array,
                     prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array))
 
-         res = calc_expected_rewards(
+        res = calc_expected_rewards(
             learner.brain,
             prev_score_list,
             selected_node_list,
@@ -110,7 +110,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         end
         learner.taget_update_count += 1
         fit!(learner, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array), new_temporal_difference_list
-    catch 
+    catch
         GC.gc(true)
         0.0, 0.0, 0.0, Vector{Tuple{Int,Float32}}()
     end

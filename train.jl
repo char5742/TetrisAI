@@ -1,6 +1,6 @@
 using Distributed
 
-actors = 5
+actors = 12
 learners = 1
 addprocs(actors + learners, exeflags="--project=$(Base.active_project())")
 ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
@@ -15,7 +15,7 @@ ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
 
 
 function main()
-    exp_channel = RemoteChannel(() -> Channel{Experience}(2^10))
+    exp_channel = RemoteChannel(() -> Channel{Experience}(9))
     state_channel_list = [RemoteChannel(() -> Channel(1)) for _ in 1:actors]
     @sync begin
         for i in 1:actors
@@ -67,26 +67,31 @@ end
     iter = ProgressBar(1:1000000)
     current_index = memory.index
     for i in iter
-        while isready(exp_channel)
-            add!(memory, take!(exp_channel))
-        end
-        if i % 20 == 0
-            try
-                savemodel("model/mymodel.jld2", brain.main_model)
-                tmp_ps = brain.main_model.ps |> cpu
-                for state_channel in state_channel_list
-                    # 空であれば補充
-                    if !isready(state_channel)
-                        put!(state_channel, tmp_ps)
-                    end
-                end
-            catch e
-                @warn e
+        while ( memory.index - current_index < 9)
+            if isready(exp_channel)
+                add!(memory, take!(exp_channel))
             end
-
+            sleep(0.001)
+        end
+        
+        if i % 20 == 0
+            Threads.@spawn begin
+                try
+                    savemodel("model/mymodel.jld2", brain.main_model)
+                    tmp_ps = brain.main_model.ps |> cpu
+                    Threads.@threads for state_channel in state_channel_list
+                        # 空であれば補充
+                        if !isready(state_channel)
+                            put!(state_channel, tmp_ps)
+                        end
+                    end
+                catch e
+                    @warn e
+                end
+            end
         end
         loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, prioritized_sample!(memory, Config.batchsize; priority=1), Config.γ)# i < 10e3 ? 200 :
-        update_temporal_difference(memory, new_temporal_difference_list)
+        Threads.@spawn update_temporal_difference(memory, new_temporal_difference_list)
         # 学習している間に何エピソード生成されたか
         generated_episode = memory.index - current_index
         set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d, TDES: %9.4g, STEP: %2d", loss, qmean, tspin, sum_td(memory), generated_episode)))
@@ -124,7 +129,7 @@ end
             end
 
             if agent.id == 1
-                open("output/log.txt", "a") do io
+                open("output/log.csv", "a") do io
                     println(io, @sprintf("%d, %3.1f", game_state.score, game_state.score / total_step))
                 end
             end

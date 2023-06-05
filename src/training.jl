@@ -115,3 +115,69 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         0.0, 0.0, 0.0, Vector{Tuple{Int,Float32}}()
     end
 end
+
+function qlearn(learner::Learner, batch_size, exp::Vector{Experience}, discount_rate)
+    try
+        # 行動前の状態
+        prev_game_board_array = Array{Float32}(undef, 24, 10, 1, batch_size)
+        prev_combo_array = Array{Float32}(undef, 1, batch_size)
+        prev_back_to_back_array = Array{Float32}(undef, 1, batch_size)
+        prev_holdnext_array = Array{Float32}(undef, 7, 6, batch_size)
+        # 行動前後の差分 (ミノの設置位置を示す)
+        minopos_array = Array{Float32}(undef, 24, 10, 1, batch_size)
+        # 行動により得た報酬
+        expected_reward_array = Array{Float32}(undef, 1, batch_size)
+        # その行動のtspin判定
+        prev_tspin_array = Array{Float32}(undef, 1, batch_size)
+
+        # 次の盤面の価値を予測する為に必要な情報
+        prev_score_list = Vector{Float64}(undef, batch_size)
+        next_node_list_list = Vector{Vector{Node}}(undef, batch_size)
+        selected_node_list = Vector{Node}(undef, batch_size)
+
+        for (i, (;
+            current_state,
+            selected_node,
+            next_node_list,
+            temporal_difference
+        )) in collect(enumerate(exp))
+            prev_game_board_array[:, :, 1, i] = current_state.current_game_board.binary
+            minopos_array[:, :, 1, i] = generate_minopos(selected_node.mino, selected_node.position)
+            prev_combo_array[i] = current_state.combo
+            prev_back_to_back_array[i] = current_state.back_to_back_flag
+            prev_tspin_array[i] = selected_node.tspin
+            prev_holdnext_array[:, :, i] = hcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
+
+            prev_score_list[i] = current_state.score
+            next_node_list_list[i] = next_node_list
+            selected_node_list[i] = selected_node
+        end
+        current_expect_reward_array =
+            predict(learner.brain.main_model,
+                (prev_game_board_array, minopos_array,
+                    prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array))
+
+        res = calc_expected_rewards(
+            learner.brain,
+            prev_score_list,
+            selected_node_list,
+            next_node_list_list,
+            current_expect_reward_array,
+            discount_rate,
+        )
+        for (i, (expected_reward, new_temporal_difference)) in enumerate(res)
+            expected_reward_array[i] = expected_reward
+        end
+        if learner.taget_update_count % learner.taget_update_cycle == 0
+            lock(learner.brain.targetlock) do
+                learner.brain.target_model.ps = learner.brain.main_model.ps
+                learner.brain.target_model.st = learner.brain.main_model.st
+            end
+        end
+        learner.taget_update_count += 1
+        fit!(learner, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array), sum(expected_reward_array) / batch_size, sum(prev_tspin_array)
+    catch
+        GC.gc(true)
+        0.0, 0.0, 0.0, Vector{Tuple{Int,Float32}}()
+    end
+end

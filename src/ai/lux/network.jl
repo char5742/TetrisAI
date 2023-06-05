@@ -69,8 +69,8 @@ return score
 function QNetwork(kernel_size::Int64, resblock_size::Int64)
     Chain(
         _QNetwork(
-            BoardNet(kernel_size, resblock_size, 64),
-            ScoreNet(64 + 3),
+            BoardNet(kernel_size, resblock_size, kernel_size),
+            ScoreNet(kernel_size + 3),
         )
     )
 end

@@ -1258,7 +1258,7 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.Tetris]]
 deps = ["Printf", "Random"]
-git-tree-sha1 = "89954c4ba07bdc82eb42a95b643eb89dee2671b6"
+git-tree-sha1 = "dff91cac325eacd0eef4ea94faa6d0490466e5dc"
 repo-rev = "master"
 repo-url = "git@github.com:char5742/Tetris.git"
 uuid = "7b9bd417-ef73-4d3d-bf88-d74753caa289"

@@ -2,7 +2,7 @@ using Tetris
 include("src/TetrisAI.jl")
 using .TetrisAI
 using JLD2
-using Flux
+using Lux
 
 module TetrisJulia
 cat3(args...) = cat(args..., dims=3)
@@ -13,14 +13,15 @@ combo_normalize(x) = x / 30.0
 end
 using .TetrisJulia
 function main()
-    model = load("model/mymodel.jld2")["model"]
+    model, ps, st = loadmodel("model/mymodel_128_pre.jld2")
     display(model)
-    model = model |> gpu
+    ps = ps |> gpu
+    st = st |> gpu
 
     game_state = GameState()
     move_state = MoveState()
     init_screen()
-    ai(model, game_state, move_state)
+    ai(Model(model, ps, st), game_state, move_state)
     endwin()
 end
 

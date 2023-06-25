@@ -66,13 +66,20 @@ mino_list: size(6, 7, B) HOLD+NEXT
 arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
 return score  
 """
-function QNetwork(kernel_size::Int64, resblock_size::Int64)
+function QNetwork(kernel_size::Int64, resblock_size::Int64; use_gpu::Bool=true)
+    use_gpu ? 
+    (Chain(
+        _QNetwork(
+            BoardNet(kernel_size, resblock_size, 128),
+            ScoreNet(128 + 3),
+        )
+    ) |> gpu ) :
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, 128),
-            ScoreNet(128+3),
+            ScoreNet(128 + 3),
         )
-    ) |> gpu
+    )
 end
 
 # 1_258_497, kernel_size=32, res_blocks=4,
@@ -150,7 +157,7 @@ function BoardNetV2(kernel_size, resblock_size)
     return BoardNetV2(
         Chain(Dense(3 + 6 * 7 => kernel_size, swish), Dense(kernel_size => kernel_size, sigmoid)),
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        [Chain(ResNetBlock(kernel_size),se_block(kernel_size)) for _ in 1:resblock_size],
+        [Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size],
         Conv((3, 3), kernel_size => kernel_size; pad=SamePad()),
         GroupNorm(kernel_size, 32),
         GlobalMeanPool(),

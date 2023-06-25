@@ -1,11 +1,12 @@
-loadmodel!(target, source) = Flux.loadmodel!(target, source)
+loadmodel!(target, source) = Flux.loadmodel!(target,  cpu(source))
+loadmodel_source!(target, path) = Flux.loadmodel!(target,  load(path, "model"))
 
 function loadmodel(path::String)
     load(path)["model"]
 end
 
 function savemodel(path::String, model)
-    save(path, "model", cpu(model))
+    jldsave(path; model=Flux.state(cpu(model)))
 end
 
 function freeze_boardnet!(optim)

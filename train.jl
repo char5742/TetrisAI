@@ -1,67 +1,115 @@
+using Distributed
+
+actors = 12
+learners = 1
+addprocs(actors + learners, exeflags="--project=$(Base.active_project())")
 ENV["JULIA_CUDA_SOFT_MEMORY_LIMIT"] = "90%"
-include("config.jl")
-include("src/TetrisAI.jl")
-using Tetris
-using .TetrisAI
-using ProgressBars
-using Printf
-using Random
+@everywhere include("config.jl")
+@everywhere include("src/TetrisAI.jl")
+@everywhere using Tetris
+@everywhere using .TetrisAI
+@everywhere using ProgressBars
+@everywhere using Printf
+@everywhere using Random
+@everywhere using Lux
 
 
+function main()
+    exp_channel = RemoteChannel(() -> Channel{Experience}(9))
+    state_channel_list = [RemoteChannel(() -> Channel(1)) for _ in 1:actors]
+    @sync begin
+        for i in 1:actors
+            @spawn actor(exp_channel, state_channel_list[i], i)
+        end
+        for i in 1:learners
+            learner(exp_channel, state_channel_list)
+        end
+    end
+end
 
-function learning()
-    main_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
-    target_model = TetrisAI.AIFlux.QNetwork(Config.kernel_size, Config.res_blocks)
-    display(main_model)
+@everywhere function learner(exp_channel::RemoteChannel, state_channel_list::Vector{RemoteChannel{Channel{Any}}})
+    # モデル読み込み
+    model, ps, st = create_model(Config.kernel_size, Config.res_blocks)
+    display(model)
     if Config.load_params
-        model = loadmodel("model/mymodel.jld2")
-
-        loadmodel!(main_model, model)
-        loadmodel!(target_model, main_model)
+        _, ps, st = loadmodel("model/mymodel.jld2")
+        for state_channel in state_channel_list
+            put!(state_channel, ps)
+        end
+        ps = ps |> gpu
+        st = st |> gpu
+        @info "load model"
     end
 
-    optim = create_optim(Config.learning_rate, main_model)
+    # 学習パラメータ取得
+    optim = create_optim(Config.learning_rate, ps)
     # TetrisAI.freeze_boardnet!(optim)
-    brain = Brain(main_model, target_model)
-    agent = Agent(0, 1.0, brain)
+    brain = Brain(Model(model, ps, st), Model(model, ps, st))
     memory = Memory(Config.batchsize * Config.memoryscale)
 
+    learner = Learner(brain, Config.ddqn_timing, 0, optim)
 
-    game_state = GameState()
+    # 初期データ待ち
     initial_data_iter = ProgressBar(1:memory.capacity)
     state = 1
-    while memory.index <= memory.capacity
-        current_step = 0
-        while !game_state.game_over_flag
-            current_step += 1
-            exp = onestep!(game_state, agent, current_step)
-            add!(memory, exp)
+    while (memory.index <= memory.capacity)
+        if isready(exp_channel)
+            add!(memory, take!(exp_channel))
             if memory.index > memory.capacity
                 break
             end
             (_, state) = iterate(initial_data_iter, state)
         end
-        game_state = GameState()
+        sleep(0.001)
     end
 
-    for i in eachindex(Config.epsilon_list)
-        Threads.@spawn playing(Agent(i, Config.epsilon_list[i], brain), memory)
-    end
-    learner = Learner(brain, Config.ddqn_timing, 0, optim)
+    # while loop でも良いけど、こっちの方が分かりやすい
     iter = ProgressBar(1:1000000)
     current_index = memory.index
     for i in iter
-        if i % 2000 == 10
-            savemodel("model/mymodel.jld2", brain.main_model)
+        while ( memory.index - current_index < 9)
+            if isready(exp_channel)
+                add!(memory, take!(exp_channel))
+            end
+            sleep(0.001)
         end
-        sleep(0.03)
-        loss, qmean, tspin = qlearn(learner, Config.batchsize, prioritized_sample!(memory, Config.batchsize; priority=1))# i < 10e3 ? 200 :
-        set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d, TDES: %9.4g, STEP: %2d", loss, qmean, tspin, sum_td(memory), memory.index - current_index)))
+        
+        if i % 20 == 0
+            Threads.@spawn begin
+                try
+                    savemodel("model/mymodel.jld2", brain.main_model)
+                    tmp_ps = brain.main_model.ps |> cpu
+                    Threads.@threads for state_channel in state_channel_list
+                        # 空であれば補充
+                        if !isready(state_channel)
+                            put!(state_channel, tmp_ps)
+                        end
+                    end
+                catch e
+                    @warn e
+                end
+            end
+        end
+        loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, prioritized_sample!(memory, Config.batchsize; priority=1), Config.γ)# i < 10e3 ? 200 :
+        Threads.@spawn update_temporal_difference(memory, new_temporal_difference_list)
+        # 学習している間に何エピソード生成されたか
+        generated_episode = memory.index - current_index
+        set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d, TDES: %9.4g, STEP: %2d", loss, qmean, tspin, sum_td(memory), generated_episode)))
         current_index = memory.index
     end
 end
 
-function playing(agent::Agent, memory::Memory)
+@everywhere function actor(exp_channel::RemoteChannel, state_channel::RemoteChannel, id::Int)
+    # モデル読み込み
+    model, ps, st = create_model(Config.kernel_size, Config.res_blocks; use_gpu=false)
+    main_model = Model(model, ps, st)
+    brain = Brain(main_model, main_model)
+    playing(Agent(id, Config.epsilon_list[id], brain), exp_channel, state_channel)
+end
+
+
+
+@everywhere function playing(agent::Agent, exp_channel::RemoteChannel, state_channel::RemoteChannel)
     game_state = GameState()
     total_step = 0
     while true
@@ -70,7 +118,7 @@ function playing(agent::Agent, memory::Memory)
             while !game_state.game_over_flag
                 current_step += 1
                 exp = onestep!(game_state, agent, current_step)
-                add!(memory, exp)
+                put!(exp_channel, exp)
                 if agent.id == 1
                     sleep(0.2)
                     save_matrix(game_state.current_game_board.color[5:end, :]; filename="data/bord.txt")
@@ -81,30 +129,34 @@ function playing(agent::Agent, memory::Memory)
             end
 
             if agent.id == 1
-                open("output/log.txt", "a") do io
+                open("output/log.csv", "a") do io
                     println(io, @sprintf("%d, %3.1f", game_state.score, game_state.score / total_step))
                 end
             end
             total_step = 0
             game_state = GameState()
-        catch
+        catch e
+            @error exception = (e, catch_backtrace())
+            rethrow(e)
             GC.gc(true)
             total_step = 0
             game_state = GameState()
+        end
+        GC.gc()
+        if isready(state_channel)
+            agent.brain.main_model.ps = take!(state_channel)
         end
     end
 
 end
 
-function onestep!(game_state::GameState, agent::Agent, current_step::Int)::Experience
+@everywhere function onestep!(game_state::GameState, agent::Agent, current_step::Int)::Experience
     node_list = get_node_list(game_state)
     node = select_node(agent, node_list, game_state)
-    previous_state = GameState(game_state)
+    exp = Experience(GameState(game_state), node, get_node_list(node.game_state), 100)
     for action in node.action_list
         action!(game_state, action)
     end
-
-    exp = make_experience(agent.brain, previous_state, node, Config.γ)
     put_mino!(game_state)
     if current_step == 250
         game_end!(game_state)
@@ -113,6 +165,6 @@ function onestep!(game_state::GameState, agent::Agent, current_step::Int)::Exper
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    learning()
+    main()
 end
 

@@ -1,22 +1,24 @@
-module AIFlux
+module AILux
 using CUDA
-using Flux, NNlib, MLUtils
+using Lux, NNlib, MLUtils, Zygote, Setfield
 using JLD2, Optimisers
+using Statistics, Random
 function __init__()
     if CUDA.has_cuda()
         @info "CUDA is on"
         CUDA.allowscalar(false)
     end
 end
+include("model.jl")
+export Model
 include("../brain.jl")
 export Learner, Brain
 include("utils.jl")
-export loadmodel!, loadmodel, savemodel, freeze_boardnet!, loadmodel_source!
+export loadmodel, savemodel
 include("network.jl")
-export QNetwork, QNetworkNextV2
+export QNetwork, create_model
 include("predict.jl")
 export predict, vector2array
 include("training.jl")
 export fit!, create_optim
-
 end

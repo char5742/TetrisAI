@@ -69,7 +69,7 @@ function get_node_list(
 )::Vector{Node}
     node_list = Vector{Node}()
     simulated_board = Set{Matrix{Int64}}()
-    start_position=Position(mino)
+    start_position = Position(mino)
     for r in 1:4
         rotate_action_list = Vector{Action}()
         # 無回転
@@ -198,3 +198,8 @@ function generate_minopos(mino::Mino, position::Position)::Matrix{Int64}
     end
     return board
 end
+
+
+Tetris.move(position::Position, x::Int64, y::Int64)::Position = move(position, x |> Int8, y |> Int8)
+Tetris.rotate(mino::Mino, position::Position, binary_board::Matrix{Int8}, r::Int64)::Tuple{Mino,Position,Bool} = rotate(mino, position, binary_board, r |> Int8)
+Tetris.valid_movement(mino::Mino, position::Position,  binary_board::Matrix{Int8}, mv_x::Int64, mv_y::Int64) = valid_movement(mino, position,  binary_board, mv_x |> Int8, mv_y |> Int8)

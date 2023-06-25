@@ -10,7 +10,6 @@ function fit!(learner::Learner, x, y)
         trainingloss, (∇model,) = Flux.withgradient(learner.brain.main_model) do m
             Flux.Losses.mse(m(x), y)
         end
-
         Optimisers.update!(learner.optim, learner.brain.main_model, ∇model)
         trainingloss
     end

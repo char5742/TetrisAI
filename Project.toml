@@ -1,0 +1,13 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CodecZstd = "6b39b394-51ab-5f42-8807-6242bab2b4c2"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+ProgressBars = "49802e3a-d2f1-5c88-81d8-b72133a6f568"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+Tetris = "7b9bd417-ef73-4d3d-bf88-d74753caa289"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

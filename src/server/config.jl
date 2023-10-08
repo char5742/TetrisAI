@@ -13,7 +13,7 @@ end
 
 
 Config = _Config(
-    load_params=true,
+    load_params=false,
     kernel_size=64,
     res_blocks=5,
     γ=0.95,

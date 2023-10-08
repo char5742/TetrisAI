@@ -10,7 +10,7 @@ using Dates
 # https://github.com/JuliaGPU/CUDA.jl/pull/1943
 CUDA.math_mode!(CUDA.PEDANTIC_MATH)
 
-const server = "http://34.84.135.39"
+const server = "http://127.0.0.1:10513"
 
 include("config.jl")
 
@@ -40,9 +40,9 @@ function main(Config::_Config)
         minibatch_task = Threads.@spawn get_minibatch()
         loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
         show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
-        open("log.csv", "a") do io
-            println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
-        end
+        # open("log.csv", "a") do io
+        #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
+        # end
         Threads.@spawn update_priority(new_temporal_difference_list)
         minibatch = fetch(minibatch_task)
     end

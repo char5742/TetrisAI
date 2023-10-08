@@ -1,7 +1,9 @@
 module AILux
 using CUDA
-using Lux, NNlib, MLUtils, Zygote, Setfield
-import Lux: gpu, cpu
+using Lux, LuxCUDA, NNlib, MLUtils, Zygote
+import Lux: gpu_device, cpu_device
+gpu = gpu_device()
+cpu = cpu_device()
 export gpu, cpu
 using JLD2, Optimisers
 using Statistics, Random

@@ -19,23 +19,21 @@ function BoardNet(kernel_size, resblock_size, output_size)
         Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size),
-        GlobalMeanPool(),
+        GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
     )
 end
 function (m::BoardNet)((board, minopos), ps, st)
     z = cat3(neg(board), neg(minopos))
     z, _ = m.conv1(z, ps.conv1, st.conv1)
-    z, st_ = m.norm1(z, ps.norm1, st.norm1)
-    @set! st.norm1 = st_
+    z, st_norm1 = m.norm1(z, ps.norm1, st.norm1)
     z = swish(z)
-    z, st_ = m.resblocks(z, ps.resblocks, st.resblocks)
-    @set! st.resblocks = st_
+    z, st_resblocks = m.resblocks(z, ps.resblocks, st.resblocks)
     z, _ = m.conv2(z, ps.conv2, st.conv2)
-    z, st_ = m.norm2(z, ps.norm2, st.norm2)
-    @set! st.norm2 = st_
+    z, st_norm2 = m.norm2(z, ps.norm2, st.norm2)
     z = swish(z)
     z, _ = m.gmp(z, ps.gmp, st.gmp)
     z = flatten(z)
+    st = merge(st, (norm2=st_norm2, norm1=st_norm1, resblocks=st_resblocks))
     z, st
 end
 
@@ -46,11 +44,11 @@ end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     # mino_vector = flatten(mino_list)
-    board_feature, st_ = m.board_net((board, minopos), ps.board_net, st.board_net)
-    @set! st.board_net = st_
+    board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
+
     y = vcat(board_feature, combo_normalize(ren), btb, tspin)
-    score, st_ = m.score_net(y, ps.score_net, st.score_net)
-    @set! st.score_net = st_
+    score, st_score_net = m.score_net(y, ps.score_net, st.score_net)
+    st = merge(st, (board_net=st_board_net, score_net=st_score_net))
     score, st
 end
 

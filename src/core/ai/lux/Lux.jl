@@ -7,6 +7,7 @@ cpu = cpu_device()
 export gpu, cpu
 using JLD2, Optimisers
 using Statistics, Random
+using NamedTupleTools
 function __init__()
     if CUDA.has_cuda()
         @info "CUDA is on"
@@ -19,10 +20,11 @@ include("../brain.jl")
 export Brain
 include("utils.jl")
 export loadmodel, savemodel
+include("layers.jl")
 include("network.jl")
 export QNetwork, create_model
 include("predict.jl")
 export predict, vector2array
 include("fit.jl")
-export fit, create_optim
+export fit, create_optim, set_weightdecay
 end

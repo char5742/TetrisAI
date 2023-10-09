@@ -16,7 +16,7 @@ function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
-        Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
+        Chain([ResNetBlock(kernel_size) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
@@ -33,21 +33,33 @@ function (m::BoardNet)((board, minopos), ps, st)
     z = swish(z)
     z, _ = m.gmp(z, ps.gmp, st.gmp)
     z = flatten(z)
+    # z = reshape(z, (240, size(z, 3), size(z, 4)))
     st = merge(st, (norm2=st_norm2, norm1=st_norm1, resblocks=st_resblocks))
     z, st
 end
 
-struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :score_net,)}
+struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :board_encoder, :combo_encoder, :btb_encoder, :tspin_encoder, :score_net,)}
     board_net
+    board_encoder
+    combo_encoder
+    btb_encoder
+    tspin_encoder
     score_net
 end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     # mino_vector = flatten(mino_list)
-    board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
+    y, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
+    board_feature, _ = m.board_encoder(y, ps.board_encoder, st.board_encoder)
 
-    y = vcat(board_feature, combo_normalize(ren), btb, tspin)
-    score, st_score_net = m.score_net(y, ps.score_net, st.score_net)
+    combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
+    combo_feature = unsqueeze(combo_feature, dims=2)
+    btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)
+    btb_feature = unsqueeze(btb_feature, dims=2)
+    tspin_feature, _ = m.tspin_encoder(tspin, ps.tspin_encoder, st.tspin_encoder)
+    tspin_feature = unsqueeze(tspin_feature, dims=2)
+    y = hcat(board_feature, combo_feature, btb_feature, tspin_feature)
+    score, st_score_net = m.score_net((y, nothing), ps.score_net, st.score_net)
     st = merge(st, (board_net=st_board_net, score_net=st_score_net))
     score, st
 end
@@ -68,6 +80,10 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, boardhidden_size),
+            Dense(boardhidden_size => 48),
+            Dense(1 => 48),
+            Dense(1 => 48),
+            Dense(1 => 48),
             ScoreNet(boardhidden_size + 3),
         )
     )
@@ -86,17 +102,6 @@ function ResNetBlock(n)
     return Chain(SkipConnection(layers, +), swish)
 end
 
-
-
-function se_block(ch, ratio=4)
-    layers = Chain(
-        GlobalMeanPool(),
-        Conv((1, 1), ch => ch ÷ ratio, swish),
-        Conv((1, 1), ch ÷ ratio => ch, sigmoid),
-    )
-    return Chain(SkipConnection(layers, .*))
-end
-
 """
 抽出した特徴から価値を計算するネットワーク  
 
@@ -104,12 +109,34 @@ arg: (feature)
 return: score  
 """
 function ScoreNet(feature_size)
-    Chain(
-        Dense(feature_size => 1024, swish), # 41, 42
-        Dense(1024 => 256, swish),# 43, 44
-        Dense(256 => 1),# 45, 46
+    features = 48
+    nheads = 3
+    matrix_size = 48
+    seq_len = feature_size
+    Decoder(
+        Dense(matrix_size => features),
+        PositionalEncodingLayer(features, seq_len),
+        Chain([
+            DecoderBlock(
+                MultiHeadAttention(
+                    Dense(features => features),
+                    Dense(features => features),
+                    Dense(features => features),
+                    Dropout(0.1),
+                    Dense(features => features),
+                    nheads
+                ),
+                LayerNorm((features, 1)),
+                Chain(Dense(features => features * 4, gelu), Dense(features * 4 => features), Dropout(0.1)),
+                Dropout(0.1),
+                LayerNorm((features, 1))
+            )
+            for i in 1:6
+        ]),
+        Dense(features * seq_len => 1),
     )
 end
+
 
 
 
@@ -125,3 +152,4 @@ function create_model(kernel_size::Int64, resblock_size::Int64, boardhidden_size
         return model, ps, st
     end
 end
+

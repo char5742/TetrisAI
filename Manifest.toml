@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "891faecd6330ebf21d30a243462c9d206eacf07b"
+project_hash = "c24d8c5e1893795bac86afa22355fbc986ad9e85"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "5d2e21d7b0d8c22f67483ef95ebdc39c0e6b6003"
@@ -699,6 +699,11 @@ deps = ["PrettyPrint"]
 git-tree-sha1 = "1a0fa0e9613f46c9b8c11eee38ebb4f590013c5e"
 uuid = "71a1bf82-56d0-4bbc-8a3c-48b961074391"
 version = "0.1.5"
+
+[[deps.NamedTupleTools]]
+git-tree-sha1 = "90914795fc59df44120fe3fff6742bb0d7adb1d0"
+uuid = "d9ec5142-1e00-5aa0-9d6a-321866360f50"
+version = "0.14.3"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"

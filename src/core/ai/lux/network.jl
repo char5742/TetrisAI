@@ -51,7 +51,7 @@ function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     # mino_vector = flatten(mino_list)
     y, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
     board_feature, _ = m.board_encoder(y, ps.board_encoder, st.board_encoder)
-
+    board_feature = unsqueeze(board_feature, dims=2)
     combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
     combo_feature = unsqueeze(combo_feature, dims=2)
     btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)

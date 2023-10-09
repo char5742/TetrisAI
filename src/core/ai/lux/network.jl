@@ -84,7 +84,7 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
             Dense(1 => 48),
             Dense(1 => 48),
             Dense(1 => 48),
-            ScoreNet(boardhidden_size + 3),
+            ScoreNet(4),
         )
     )
 end

@@ -19,21 +19,22 @@ end
 create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.AdamW(learning_rate, (0.9, 0.95), learning_rate * 0.1), ps)
 
 
-"""
-bias, scale の重みのWeightDecayを再帰的に0にする
-"""
-function _set_weightdecay(t)
-    chache = (;)
-    for k in keys(t)
-        if t[k] isa Optimisers.Leaf
-            if k == :bias || k == :scale
-                chache = merge_recursive(chache, (; k => Optimisers.Leaf(OptimiserChain(Adam(0.0, (0.9, 0.95), 1.0e-8), WeightDecay(0)), t[k].state,)),)
+function set_weightdecay(optim, learning_rate)
+    """
+    bias, scale の重みのWeightDecayを再帰的に0にする
+    """
+    function _set_weightdecay(t)
+        chache = (;)
+        for k in keys(t)
+            if t[k] isa Optimisers.Leaf
+                if k == :bias || k == :scale
+                    chache = merge_recursive(chache, (; k => Optimisers.Leaf(OptimiserChain(Adam(learning_rate, (0.9, 0.95), 1.0e-8), WeightDecay(0)), t[k].state,)),)
+                end
+            else
+                chache = merge_recursive(chache, (; k => _set_weightdecay(t[k])))
             end
-        else
-            chache = merge_recursive(chache, (; k => _set_weightdecay(t[k])))
         end
+        chache
     end
-    chache
+    merge_recursive(optim, _set_weightdecay(optim))
 end
-
-set_weightdecay(optim) = merge_recursive(optim, _set_weightdecay(optim))

@@ -153,7 +153,7 @@ function initialize_learner(
     t_ps, t_st = get_model_params("targetmodel") .|> gpu
     brain = Brain(Model(model, ps, st), Model(model, t_ps, t_st))
     optim = create_optim(learning_rate, ps)
-    optim = set_weightdecay(optim)
+    optim = set_weightdecay(optim, learning_rate)
     learner = Learner(brain, taget_update_cycle, taget_update_count, optim)
     return learner
 end

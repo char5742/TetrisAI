@@ -39,15 +39,15 @@ function batch_predict(model, data, batch_size)
         end_idx = min(i * batch_size, n)
 
         # Split the data into batches
-        @views board_input_prev_batch = board_input_prev[:, :, :, start_idx:end_idx] |> gpu
-        @views minopos_batch = minopos[:, :, :, start_idx:end_idx] |> gpu
-        @views combo_input_batch = combo_input[:, start_idx:end_idx] |> gpu
-        @views back_to_back_batch = back_to_back[:, start_idx:end_idx] |> gpu
-        @views tspin_batch = tspin[:, start_idx:end_idx] |> gpu
-        @views mino_list_batch = mino_list[:, :, start_idx:end_idx] |> gpu
+        board_input_prev_batch = board_input_prev[:, :, :, start_idx:end_idx]
+        minopos_batch = minopos[:, :, :, start_idx:end_idx] 
+        combo_input_batch = combo_input[:, start_idx:end_idx] 
+        back_to_back_batch = back_to_back[:, start_idx:end_idx] 
+        tspin_batch = tspin[:, start_idx:end_idx] 
+        mino_list_batch = mino_list[:, :, start_idx:end_idx] 
 
         # Send the batched data to the model
-        data_batch = (board_input_prev_batch, minopos_batch, combo_input_batch, back_to_back_batch, tspin_batch, mino_list_batch)
+        data_batch = (board_input_prev_batch, minopos_batch, combo_input_batch, back_to_back_batch, tspin_batch, mino_list_batch)  |> gpu
         response_batch, _ = model.model(data_batch, model.ps, model.st) |> cpu
         push!(responses, response_batch)
     end

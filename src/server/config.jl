@@ -20,7 +20,7 @@ Config = _Config(
     ddqn_timing=400,
     learning_rate=1.0f-4,
     batchsize=16,
-    memoryscale=16^1,
+    memoryscale=16^3,
     epsilon_list=Float32[
      0, 0, 0.01, 0.01,
     #  0.01, 0.1, 0.05, 0.05,

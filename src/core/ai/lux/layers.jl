@@ -92,3 +92,46 @@ function (m::Decoder)((x, mask), ps, st)
     st = merge(st, (blocks=st_blocks, output=st_out))
     return output, st
 end
+
+struct ConvolutionalTokenEmbedding <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv, :norm)}
+    conv
+    norm
+end
+
+function (m::ConvolutionalTokenEmbedding)(x, ps, st)
+    # x = (token_size, seq_len, batch_size)
+    x, _ = m.conv(x, ps.conv, st.conv)
+    x = flatten(x)
+    x, _ = m.norm(x, ps.norm, st.norm)
+    return x, st
+end
+
+struct ConvolutionalTransfomerBlock <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv1, :norm1, :conv2, :norm2)}
+    query
+    key
+    value
+    dropout
+    output
+    nheads
+end
+
+function (m::ConvolutionalTransfomerBlock)(x, ps, st)
+    # x = (features, seq_len, batch_size)
+    x = reshape(x, 24, 10, 1, size(x, 2))
+    q, _ = m.query(x, ps.query, st.query)
+    q = flatten(q)
+    k, _ = m.key(x, ps.key, st.key)
+    k = flatten(k)
+    v, _ = m.value(x, ps.value, st.value)
+    v = flatten(v)
+    st_dropout = nothing
+    function fdrop(x)
+        x, st_dropout = m.dropout(x, ps.dropout, st.dropout)
+        x
+    end
+    values, _ = dot_product_attention(q, k, v; fdrop=fdrop, nheads=m.nheads)
+
+    output, _ = m.output(values, ps.output, st.output)
+    st = merge(st, (dropout=st_dropout,))
+    return output, st
+end

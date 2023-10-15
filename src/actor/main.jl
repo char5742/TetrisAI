@@ -54,7 +54,6 @@ function main()
             game_state = GameState()
         catch e
             @error exception = (e, catch_backtrace())
-            rethrow(e)
             GC.gc(true)
             total_step = 0
             game_state = GameState()
@@ -117,7 +116,11 @@ function onestep!(game_state::GameState, actor::Actor, current_step::Int)::Exper
     node_list = get_node_list(game_state)
     node = select_node(actor, node_list, game_state)
     tmp_nodelist = get_node_list(node.game_state)
+    GC.gc(false)
     td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
+    if isnan(td_error)
+        throw("nan")
+    end
     exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)
     for action in node.action_list
         action!(game_state, action)

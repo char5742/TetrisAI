@@ -16,7 +16,7 @@ function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size),
-        Chain([ResNetBlock(kernel_size) for _ in 1:resblock_size]),
+        Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
@@ -38,27 +38,28 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, st
 end
 
-struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :board_encoder, :combo_encoder, :btb_encoder, :tspin_encoder, :score_net,)}
+struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :board_encoder, :combo_encoder, :btb_encoder, :tspin_encoder, :score_net, :mino_list_encoder)}
     board_net
     board_encoder
     combo_encoder
     btb_encoder
     tspin_encoder
+    mino_list_encoder
     score_net
 end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
-    # mino_vector = flatten(mino_list)
-    y, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
-    board_feature, _ = m.board_encoder(y, ps.board_encoder, st.board_encoder)
-    board_feature = unsqueeze(board_feature, dims=2)
+    board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
+    board_feature = unsqueeze(board_feature, dims=1)
+    board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
     combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
     combo_feature = unsqueeze(combo_feature, dims=2)
     btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)
     btb_feature = unsqueeze(btb_feature, dims=2)
     tspin_feature, _ = m.tspin_encoder(tspin, ps.tspin_encoder, st.tspin_encoder)
     tspin_feature = unsqueeze(tspin_feature, dims=2)
-    y = hcat(board_feature, combo_feature, btb_feature, tspin_feature)
+    mino_list_feature, _ = m.mino_list_encoder(mino_list, ps.mino_list_encoder, st.mino_list_encoder)
+    y = hcat(board_feature, combo_feature, btb_feature, tspin_feature, mino_list_feature)
     score, st_score_net = m.score_net((y, nothing), ps.score_net, st.score_net)
     st = merge(st, (board_net=st_board_net, score_net=st_score_net))
     score, st
@@ -80,11 +81,12 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, boardhidden_size),
-            Dense(boardhidden_size => 48),
             Dense(1 => 48),
             Dense(1 => 48),
             Dense(1 => 48),
-            ScoreNet(4),
+            Dense(1 => 48),
+            Dense(7 => 48),
+            ScoreNet(boardhidden_size + 3 + 6),
         )
     )
 end
@@ -101,6 +103,17 @@ function ResNetBlock(n)
 
     return Chain(SkipConnection(layers, +), swish)
 end
+
+
+function se_block(ch, ratio=4)
+    layers = Chain(
+        GlobalMeanPool(),
+        Conv((1, 1), ch => ch ÷ ratio, swish),
+        Conv((1, 1), ch ÷ ratio => ch, sigmoid),
+    )
+    return Chain(SkipConnection(layers, .*))
+end
+
 
 """
 抽出した特徴から価値を計算するネットワーク  
@@ -133,7 +146,10 @@ function ScoreNet(feature_size)
             )
             for i in 1:6
         ]),
-        Dense(features * seq_len => 1),
+        Chain(
+            Dense(features * seq_len => 256, gelu),
+            Dense(256 => 1),
+        ),
     )
 end
 
@@ -153,3 +169,16 @@ function create_model(kernel_size::Int64, resblock_size::Int64, boardhidden_size
     end
 end
 
+function warmup(model, ps, st; use_gpu=true)
+    board = rand(24, 10, 1, 1)
+    minopos = rand(24, 10, 1, 1)
+    combo = rand(1, 1)
+    btb = rand(1, 1)
+    tspin = rand(1, 1)
+    mino_list = rand(7, 6, 1)
+    if (use_gpu)
+        model((board, minopos, combo, btb, tspin, mino_list) |> gpu, ps, st) |> cpu
+    else
+        model((board, minopos, combo, btb, tspin, mino_list), ps, st) |> cpu
+    end
+end

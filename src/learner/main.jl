@@ -37,14 +37,20 @@ function main(Config::_Config)
     iter = show_progress ? ProgressBar(1:1_000_000) : 1:1_000_000
     minibatch = get_minibatch()
     for i in iter
-        minibatch_task = Threads.@spawn get_minibatch()
-        loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
-        show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
-        # open("log.csv", "a") do io
-        #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
-        # end
-        Threads.@spawn update_priority(new_temporal_difference_list)
-        minibatch = fetch(minibatch_task)
+        try
+            minibatch_task = Threads.@spawn get_minibatch()
+            loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
+            show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
+            # open("log.csv", "a") do io
+            #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
+            # end
+            Threads.@spawn update_priority(new_temporal_difference_list)
+            minibatch = fetch(minibatch_task)
+        catch e
+            @error exception = (e, catch_backtrace())
+        finally
+            GC.gc(false)
+        end
     end
 end
 
@@ -149,6 +155,7 @@ function initialize_learner(
     taget_update_count::Int64,
 )::Learner
     model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, 128)
+    display(model)
     ps, st = get_model_params("mainmodel") .|> gpu
     t_ps, t_st = get_model_params("targetmodel") .|> gpu
     brain = Brain(Model(model, ps, st), Model(model, t_ps, t_st))

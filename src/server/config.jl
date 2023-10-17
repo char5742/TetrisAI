@@ -9,28 +9,30 @@ Base.@kwdef struct _Config
     batchsize::Int
     memoryscale::Int
     epsilon_list::Vector{Float32}
+    multisteps::Int
 end
 
 
 Config = _Config(
-    load_params=false,
+    load_params=true,
     kernel_size=64,
     res_blocks=5,
     γ=0.95,
     ddqn_timing=400,
-    learning_rate=1.0f-4,
+    learning_rate=1.0f-5,
     batchsize=16,
-    memoryscale=16^3,
+    memoryscale=16^2 * 4,
     epsilon_list=Float32[
-     0, 0, 0.01, 0.01,
-    #  0.01, 0.1, 0.05, 0.05,
-     0.1, 0.05, 0.05, 0.3, 
-    #  0.01, 0.01, 0.01, 0.01,
-     0.05, 0.05, 0.05, 0.1, 
-    #  0.05, 0.05, 0.05, 0.1, 
-    #  0.1, 0.1, 0.5, 0.5,
-    #  0.5, 0.5, 0.7,
-     ],
+        0, 0, 0.01, 0.01,
+        #  0.01, 0.1, 0.05, 0.05,
+        0.1, 0.05, 0.05, 0.3,
+        #  0.01, 0.01, 0.01, 0.01,
+        0.05, 0.05, 0.05, 0.1,
+        #  0.05, 0.05, 0.05, 0.1, 
+        #  0.1, 0.1, 0.5, 0.5,
+        #  0.5, 0.5, 0.7,
+    ],
+    multisteps=3,
 )
 
 function config_route(request::HTTP.Request)

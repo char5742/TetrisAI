@@ -16,10 +16,8 @@ const root = "http://127.0.0.1:10513"
 const memoryserver = "$root/memory"
 const paramserver = "$root/param"
 
-
 include("config.jl")
-
-
+include("hippocampus.jl")
 
 function main()
     actor = initialize_actor(
@@ -36,8 +34,7 @@ function main()
             current_step = 0
             while !game_state.game_over_flag
                 current_step += 1
-                exp = onestep!(game_state, actor, current_step)
-                Threads.@spawn upload_exp(exp)
+                onestep!(game_state, actor, current_step)
                 if actor.id == 1
                     sleep(0.2)
                     draw_game2file(game_state.current_game_board.color[5:end, :]; score=game_state.score)
@@ -50,9 +47,15 @@ function main()
                     println(io, @sprintf("%s, %d, %3.1f", Dates.format(now(), "yyyy/mm/dd HH:MM:SS"), game_state.score, game_state.score / total_step))
                 end
             end
+
+            exp_list = create_experience(actor, Config.multisteps, Config.γ)
+            for exp in exp_list
+                upload_exp(exp)
+            end
             total_step = 0
             game_state = GameState()
         catch e
+            rethrow(e)
             @error exception = (e, catch_backtrace())
             GC.gc(true)
             total_step = 0
@@ -112,16 +115,11 @@ function initialize_actor(
     return Actor(actor_id, epsilon, brain)
 end
 
-function onestep!(game_state::GameState, actor::Actor, current_step::Int)::Experience
+function onestep!(game_state::GameState, actor::Actor, current_step::Int)
     node_list = get_node_list(game_state)
     node = select_node(actor, node_list, game_state)
-    tmp_nodelist = get_node_list(node.game_state)
+    add_action_data(GameState(game_state), node)
     GC.gc(false)
-    td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
-    if isnan(td_error)
-        throw("nan")
-    end
-    exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)
     for action in node.action_list
         action!(game_state, action)
     end
@@ -129,7 +127,6 @@ function onestep!(game_state::GameState, actor::Actor, current_step::Int)::Exper
     if current_step == 250
         game_end!(game_state)
     end
-    return exp
 end
 
 """

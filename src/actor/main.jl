@@ -27,6 +27,7 @@ function main()
         epsilon,
         use_gpu=use_gpu,
     )
+    campus = Hippocampus()
     game_state = GameState()
     total_step = 0
     while true
@@ -34,7 +35,7 @@ function main()
             current_step = 0
             while !game_state.game_over_flag
                 current_step += 1
-                onestep!(game_state, actor, current_step)
+                onestep!(campus, game_state, actor, current_step)
                 if actor.id == 1
                     sleep(0.2)
                     draw_game2file(game_state.current_game_board.color[5:end, :]; score=game_state.score)
@@ -48,7 +49,7 @@ function main()
                 end
             end
 
-            exp_list = create_experience(actor, Config.multisteps, Config.γ)
+            exp_list = create_experience(campus, actor, Config.multisteps, Config.γ)
             for exp in exp_list
                 upload_exp(exp)
             end
@@ -115,10 +116,10 @@ function initialize_actor(
     return Actor(actor_id, epsilon, brain)
 end
 
-function onestep!(game_state::GameState, actor::Actor, current_step::Int)
+function onestep!(campus::Hippocampus, game_state::GameState, actor::Actor, current_step::Int)
     node_list = get_node_list(game_state)
     node = select_node(actor, node_list, game_state)
-    add_action_data(GameState(game_state), node)
+    add_action_data(campus, GameState(game_state), node)
     GC.gc(false)
     for action in node.action_list
         action!(game_state, action)

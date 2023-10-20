@@ -14,7 +14,7 @@ const paramserver = "$root/param"
 
 
 include("config.jl")
-
+include("hippocampus.jl")
 
 function main()
     actors, brain = initialize_actors(
@@ -22,10 +22,20 @@ function main()
         Config.res_blocks,
         [0, 0, 0.05, 0.1, 0.3]
     )
-    for i in 1:Threads.nthreads()-1
-        Threads.@spawn run(actors[i])
+    while true
+
+        Threads.@threads for a in actors
+            run(a)
+        end
+        Threads.@threads for a in actors
+            run(a)
+        end
+        Threads.@threads for a in actors
+            run(a)
+        end
+        update_model(brain)
     end
-    update_model(brain)
+
 
 end
 
@@ -58,42 +68,22 @@ function update_model(brain::Brain)
 end
 
 function run(actor::Actor)
-    if actor.id == 1
-        while (check_ready_learning(Config.batchsize * Config.memoryscale) == false)
-            sleep(1)
-        end
-
-    end
     game_state = GameState()
+    campus = Hippocampus()
     total_step = 0
-    while true
-        try
-            current_step = 0
-            while !game_state.game_over_flag
-                current_step += 1
-                exp = onestep!(game_state, actor, current_step)
-                upload_exp(exp)
-                GC.gc(false)
-                if actor.id == 1
-                    sleep(0.2)
-                    draw_game2file(game_state.current_game_board.color[5:end, :]; score=game_state.score)
-                end
-                total_step += 1
-            end
-
-            if actor.id == 1
-                open("log.csv", "a") do io
-                    println(io, @sprintf("%s, %d, %3.1f", Dates.format(now(), "yyyy/mm/dd HH:MM:SS"), game_state.score, game_state.score / total_step))
-                end
-            end
-            total_step = 0
-            game_state = GameState()
-        catch e
-            @error exception = (e, catch_backtrace())
-            GC.gc(true)
-            total_step = 0
-            game_state = GameState()
+    current_step = 0
+    while !game_state.game_over_flag
+        current_step += 1
+        onestep!(campus, game_state, actor, current_step)
+        if actor.id == 1
+            sleep(0.2)
+            draw_game2file(game_state.current_game_board.color[5:end, :]; score=game_state.score)
         end
+        total_step += 1
+    end
+    exp_list = create_experience(campus, actor, Config.multisteps, Config.γ)
+    for exp in exp_list
+        upload_exp(exp)
     end
 end
 
@@ -144,15 +134,14 @@ function initialize_actors(
         t_ps, t_st = (t_ps, t_st) .|> gpu
     end
     brain = Brain(Model(model, ps, st), Model(model, t_ps, t_st))
-    return [Actor(i, epsilon_list[i], brain) for i in 1:Threads.nthreads()-1], brain
+    return [Actor(i, epsilon_list[i], brain) for i in 1:Threads.nthreads], brain
 end
 
-function onestep!(game_state::GameState, actor::Actor, current_step::Int)::Experience
+function onestep!(campus::Hippocampus, game_state::GameState, actor::Actor, current_step::Int)::Experience
     node_list = get_node_list(game_state)
     node = select_node(actor, node_list, game_state)
-    tmp_nodelist = get_node_list(node.game_state)
-    td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
-    exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)
+    add_action_data(campus, GameState(game_state), node)
+    GC.gc(false)
     for action in node.action_list
         action!(game_state, action)
     end
@@ -160,7 +149,6 @@ function onestep!(game_state::GameState, actor::Actor, current_step::Int)::Exper
     if current_step == 250
         game_end!(game_state)
     end
-    return exp
 end
 
 """

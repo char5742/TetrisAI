@@ -15,10 +15,10 @@ end
 function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        BatchNorm(kernel_size),
+        LayerNorm((24, 10, 1)),
         Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
-        BatchNorm(output_size),
+        LayerNorm((24, 10, 1)),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
     )
 end
@@ -31,9 +31,9 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, _ = m.conv2(z, ps.conv2, st.conv2)
     z, st_norm2 = m.norm2(z, ps.norm2, st.norm2)
     z = swish(z)
-    z, _ = m.gmp(z, ps.gmp, st.gmp)
-    z = flatten(z)
-    # z = reshape(z, (240, size(z, 3), size(z, 4)))
+    # z, _ = m.gmp(z, ps.gmp, st.gmp)
+    # z = flatten(z)
+    z = reshape(z, (240, size(z, 3), size(z, 4)))
     st = merge(st, (norm2=st_norm2, norm1=st_norm1, resblocks=st_resblocks))
     z, st
 end
@@ -50,7 +50,7 @@ end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
-    board_feature = unsqueeze(board_feature, dims=1)
+    # board_feature = unsqueeze(board_feature, dims=1)
     board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
     combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
     combo_feature = unsqueeze(combo_feature, dims=2)
@@ -78,15 +78,17 @@ arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)
 return score  
 """
 function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::Int64)
+    matrix_size = 48
+    nheads = 3
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, boardhidden_size),
-            Dense(1 => 48),
-            Dense(1 => 48),
-            Dense(1 => 48),
-            Dense(1 => 48),
-            Dense(7 => 48),
-            ScoreNet(boardhidden_size + 3 + 6),
+            Dense(240 => matrix_size, gelu),
+            Dense(1 => matrix_size, gelu),
+            Dense(1 => matrix_size, gelu),
+            Dense(1 => matrix_size, gelu),
+            Dense(7 => matrix_size, gelu),
+            ScoreNet(boardhidden_size + 3 + 6, matrix_size, nheads),
         )
     )
 end
@@ -95,10 +97,9 @@ end
 function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
-        BatchNorm(n),
+        LayerNorm((24, 10, 1)),
         swish,
         Conv((3, 3), n => n, pad=SamePad()),
-        BatchNorm(n),
     )
 
     return Chain(SkipConnection(layers, +), swish)
@@ -121,11 +122,8 @@ end
 arg: (feature)  
 return: score  
 """
-function ScoreNet(feature_size)
-    features = 48
-    nheads = 3
-    matrix_size = 48
-    seq_len = feature_size
+function ScoreNet(seq_len, matrix_size, nheads)
+    features = matrix_size
     Decoder(
         Dense(matrix_size => features),
         PositionalEncodingLayer(features, seq_len),
@@ -147,7 +145,10 @@ function ScoreNet(feature_size)
             for i in 1:6
         ]),
         Chain(
-            Dense(features * seq_len => 256, gelu),
+            GlobalMeanPool(),
+            WrappedFunction(flatten),
+            Dense(seq_len => 1024, gelu),
+            Dense(1024 => 256, gelu),
             Dense(256 => 1),
         ),
     )

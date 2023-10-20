@@ -85,8 +85,6 @@ function (m::Decoder)((x, mask), ps, st)
     # x = (features, seq_len, batch_size)
 
     (x, _), st_blocks = m.blocks((x, mask), ps.blocks, st.blocks)
-
-    x = flatten(x)
     output, st_out = m.output(x, ps.output, st.output)
     # output = (token_size, seq_len, batch_size)
     st = merge(st, (blocks=st_blocks, output=st_out))

@@ -1,35 +1,33 @@
-module Hippocampus
-using ..TetrisAICore
-using Tetris
 struct ActionData
     game_state::GameState
     node::Node
 end
-
-"１ゲーム中に集めた行動データ"
-const action_data_list = Ref{Vector{ActionData}}(Vector{ActionData}())
+struct Hippocampus
+    "１ゲーム中に集めた行動データ"
+    action_data_list::Vector{ActionData}
+    Hippocampus() = new(Vector{ActionData}())
 end
 
-function add_action_data(state::GameState, node::Node)
-    push!(Hippocampus.action_data_list[], Hippocampus.ActionData(state, node))
+function add_action_data(campus::Hippocampus,state::GameState, node::Node)
+    push!(campus.action_data_list, ActionData(state, node))
 end
 
-function create_experience(actor::Actor, multisteps::Int, γ::Float64)::Vector{Experience}
+function create_experience(campus::Hippocampus,actor::Actor, multisteps::Int, γ::Float64)::Vector{Experience}
     exp_list = Vector{Experience}()
-    data_length = length(Hippocampus.action_data_list[])
+    data_length = length(campus.action_data_list)
     for i in 1:data_length
         # 盤面の価値を学習するターゲット
-        target_data = Hippocampus.action_data_list[][i]
+        target_data = campus.action_data_list[i]
         # multistepで報酬を計算する
         prev_score = target_data.game_state.score
         n = min(multisteps - 1, data_length - i)
         multistep_reward = 0
         for j in 0:n
-            data = Hippocampus.action_data_list[][i+j]
+            data = campus.action_data_list[i+j]
             multistep_reward += γ^j * (data.node.game_state.score - prev_score)
             prev_score = data.node.game_state.score
         end
-        last_data = Hippocampus.action_data_list[][i+n]
+        last_data = campus.action_data_list[i+n]
         last_node = last_data.node
         next_nodelist = get_node_list(last_node.game_state)
         td_error = calc_td_error(target_data.game_state,
@@ -46,7 +44,7 @@ function create_experience(actor::Actor, multisteps::Int, γ::Float64)::Vector{E
         GC.gc(false)
         push!(exp_list, exp)
     end
-    Hippocampus.action_data_list[] = Vector{Hippocampus.ActionData}()
+    empty!(campus.action_data_list)
     return exp_list
 end
 
@@ -76,7 +74,7 @@ function calc_td_error(
 
 
     if multistep_node.game_state.game_over_flag
-        return abs(rescaling_reward(-1000* discount_rate^multisteps - inverse_rescaling_reward(current_expect_reward))) + ϵ
+        return abs(rescaling_reward(-1000 * discount_rate^multisteps - inverse_rescaling_reward(current_expect_reward))) + ϵ
     end
     # 次の盤面の最大の価値を算出する
     max_node =

@@ -29,6 +29,9 @@ function select_node(node_list::Vector{Node}, state::GameState, predicter::Funct
     current_holdnext_array = repeat(hcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     score_list =
         predicter(currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array)
+    if any(isnan, score_list) || any(isinf, score_list)
+        throw("score_list is invalid")
+    end
     @views index = argmax(score_list[1, :])
     return node_list[index]
 end

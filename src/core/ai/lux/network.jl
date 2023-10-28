@@ -15,10 +15,10 @@ end
 function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        LayerNorm((24, 10, 1)),
+        BatchNorm(kernel_size),
         Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
-        LayerNorm((24, 10, 1)),
+        BatchNorm(output_size),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
     )
 end
@@ -31,9 +31,9 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, _ = m.conv2(z, ps.conv2, st.conv2)
     z, st_norm2 = m.norm2(z, ps.norm2, st.norm2)
     z = swish(z)
-    # z, _ = m.gmp(z, ps.gmp, st.gmp)
-    # z = flatten(z)
-    z = reshape(z, (240, size(z, 3), size(z, 4)))
+    z, _ = m.gmp(z, ps.gmp, st.gmp)
+    z = flatten(z)
+    # z = reshape(z, (240, size(z, 3), size(z, 4)))
     st = merge(st, (norm2=st_norm2, norm1=st_norm1, resblocks=st_resblocks))
     z, st
 end
@@ -50,7 +50,7 @@ end
 Base.getindex(m::_QNetwork, i) = i == 1 ? m.board_net() : m.score_net()
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
-    # board_feature = unsqueeze(board_feature, dims=1)
+    board_feature = unsqueeze(board_feature, dims=1)
     board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
     combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
     combo_feature = unsqueeze(combo_feature, dims=2)
@@ -61,6 +61,9 @@ function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     mino_list_feature, _ = m.mino_list_encoder(mino_list, ps.mino_list_encoder, st.mino_list_encoder)
     y = hcat(board_feature, combo_feature, btb_feature, tspin_feature, mino_list_feature)
     score, st_score_net = m.score_net((y, nothing), ps.score_net, st.score_net)
+
+    # x = vcat(board_feature, combo_normalize(ren), btb, tspin)
+    # score, st_score_net = m.score_net(x, ps.score_net, st.score_net)
     st = merge(st, (board_net=st_board_net, score_net=st_score_net))
     score, st
 end
@@ -83,12 +86,13 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     Chain(
         _QNetwork(
             BoardNet(kernel_size, resblock_size, boardhidden_size),
-            Dense(240 => matrix_size, gelu),
+            Dense(1 => matrix_size, gelu),
             Dense(1 => matrix_size, gelu),
             Dense(1 => matrix_size, gelu),
             Dense(1 => matrix_size, gelu),
             Dense(7 => matrix_size, gelu),
-            ScoreNet(boardhidden_size + 3 + 6, matrix_size, nheads),
+            ScoreNetTransformer(boardhidden_size + 3 + 6, matrix_size, nheads),
+            # ScoreNetSimple(boardhidden_size + 3),
         )
     )
 end
@@ -97,7 +101,7 @@ end
 function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
-        LayerNorm((24, 10, 1)),
+        BatchNorm(n),
         swish,
         Conv((3, 3), n => n, pad=SamePad()),
     )
@@ -122,7 +126,15 @@ end
 arg: (feature)  
 return: score  
 """
-function ScoreNet(seq_len, matrix_size, nheads)
+function ScoreNetSimple(features)
+    Chain(
+        Dense(features => 1024, swish),
+        Dense(1024 => 256, swish),
+        Dense(256 => 1),
+    )
+end
+
+function ScoreNetTransformer(seq_len, matrix_size, nheads)
     features = matrix_size
     Decoder(
         Dense(matrix_size => features),
@@ -133,14 +145,14 @@ function ScoreNet(seq_len, matrix_size, nheads)
                     Dense(features => features),
                     Dense(features => features),
                     Dense(features => features),
-                    Dropout(0.1),
+                    Dropout(0.0),
                     Dense(features => features),
                     nheads
                 ),
-                LayerNorm((features, 1)),
-                Chain(Dense(features => features * 4, gelu), Dense(features * 4 => features), Dropout(0.1)),
-                Dropout(0.1),
-                LayerNorm((features, 1))
+                LayerNorm((features, seq_len)),
+                Chain(Dense(features => features * 4, gelu), Dense(features * 4 => features), Dropout(0.0)),
+                Dropout(0.0),
+                LayerNorm((features, seq_len))
             )
             for i in 1:6
         ]),
@@ -153,6 +165,7 @@ function ScoreNet(seq_len, matrix_size, nheads)
         ),
     )
 end
+
 
 
 

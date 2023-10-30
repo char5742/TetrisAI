@@ -16,7 +16,7 @@ function fit(model, ps, st, optim, x, y; use_gpu=true)
     ps, st, st_opt, trainingloss
 end
 
-create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.AdamW(learning_rate, (0.9, 0.95), learning_rate * 0.1), ps)
+create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.AdaBelief(learning_rate), ps)
 
 
 function set_weightdecay(optim, learning_rate)

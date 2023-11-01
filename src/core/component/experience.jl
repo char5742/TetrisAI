@@ -3,10 +3,6 @@
 mutable struct Experience
     current_state::GameState
     selected_node::Node
-    multistep_node::Node
-    multistep_next_node_list::Vector{Node}
-    multistep_reward::Float64
-    multisteps::Int
+    next_node_list::Vector{Node}
     temporal_difference::Float64
 end
-

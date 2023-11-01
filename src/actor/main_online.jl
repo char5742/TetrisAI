@@ -33,7 +33,7 @@ function main()
             current_step = 0
             while !game_state.game_over_flag
                 current_step += 1
-                exp = onestep!(campus, game_state, actor, current_step)
+                exp = onestep!(game_state, actor, current_step)
                 upload_exp(exp)
                 if actor.id == 1
                     sleep(0.2)

@@ -31,18 +31,22 @@ end
 function main()
     # 60秒に一回パラメータを取得する
     while true
-        touch("model/model.lock")
         try
-            ps, st = get_model_params("mainmodel")
-            jldsave("model/mainmodel.jld2"; ps=ps, st=st)
-            ps, st = get_model_params("targetmodel")
-            jldsave("model/targetmodel.jld2"; ps=ps, st=st)
-        catch
-        finally
-            rm("model/model.lock")
+            touch("model/model.lock")
+            try
+                ps, st = get_model_params("mainmodel")
+                jldsave("model/mainmodel.jld2"; ps=ps, st=st)
+                ps, st = get_model_params("targetmodel")
+                jldsave("model/targetmodel.jld2"; ps=ps, st=st)
+            catch
+            finally
+                rm("model/model.lock")
+            end
+            GC.gc()
+            sleep(240)
+        catch e
+            @error = e
         end
-        GC.gc()
-        sleep(60)
     end
 end
 

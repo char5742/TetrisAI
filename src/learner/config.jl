@@ -9,7 +9,6 @@ Base.@kwdef struct _Config
     batchsize::Int
     memoryscale::Int
     epsilon_list::Vector{Float32}
-    multisteps::Int
 end
 
 function get_config()

@@ -15,7 +15,7 @@ end
 
 Config = _Config(
     load_params=false,
-    kernel_size=64,
+    kernel_size=128,
     res_blocks=5,
     γ=0.95,
     ddqn_timing=400,
@@ -32,7 +32,6 @@ Config = _Config(
         #  0.1, 0.1, 0.5, 0.5,
         #  0.5, 0.5, 0.7,
     ],
-    multisteps=3,
 )
 
 function config_route(request::HTTP.Request)

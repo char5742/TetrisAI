@@ -4,11 +4,11 @@ struct Actor
     brain::Brain
 end
 
-function select_node(actor::Actor, node_list::Vector{Node}, state::GameState)::Node
+function select_node(actor::Actor, node_list::Vector{Node}, state::GameState, predicter::Function)::Node
     if actor.epsilon > rand()
         return rand(node_list)
     else
-        return select_node(node_list, state, (x...) -> predict(actor.brain.main_model, x))
+        return select_node(node_list, state, predicter)
     end
 end
 """
@@ -104,7 +104,9 @@ function calc_td_error(
         [node.tspin] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in current_holdnext]...), 7, 6, 1),
     )[1]
-
+    if any(isnan, current_expect_reward) || any(isinf, current_expect_reward)
+        throw("current_expect_reward is invalid")
+    end
 
     if node.game_state.game_over_flag
         return abs(rescaling_reward(-1000 - inverse_rescaling_reward(current_expect_reward))) + ϵ
@@ -121,7 +123,9 @@ function calc_td_error(
         [max_node.tspin] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in node_holdnext]...), 7, 6, 1),
     )[1]
-
+    if any(isnan, next_score) || any(isinf, next_score)
+        throw("next_score is invalid")
+    end
     # 設置後に得られるスコア
     reward = node.game_state.score - state.score
     temporal_difference = rescaling_reward(reward + inverse_rescaling_reward(next_score) * discount_rate - inverse_rescaling_reward(current_expect_reward))

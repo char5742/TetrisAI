@@ -43,9 +43,9 @@ function main()
                 rm("model/model.lock")
             end
             GC.gc()
-            sleep(240)
+            sleep(60)
         catch e
-            @error = e
+            @error e
         end
     end
 end

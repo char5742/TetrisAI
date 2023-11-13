@@ -7,6 +7,8 @@ include("config.jl")
 include("memory.jl")
 include("param.jl")
 
+const SSL_CERT_FILE = "./cert.pem"
+const SSL_KEY_FILE = "./key.pem"
 
 function router(request::HTTP.Request)
     r = config_route(request)

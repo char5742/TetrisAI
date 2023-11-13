@@ -8,18 +8,19 @@ using CUDA
 using CodecZstd
 using Dates
 # https://github.com/JuliaGPU/CUDA.jl/pull/1943
-CUDA.math_mode!(CUDA.PEDANTIC_MATH)
+# CUDA.math_mode!(CUDA.FAST_MATH)
 
 const server = "http://127.0.0.1:10513"
 
-include("config.jl")
+include("../server/config.jl")
 
 
 function main(Config::_Config)
+    current_learning_rate = Config.learning_rate
     learner = initialize_learner(
         Config.kernel_size,
         Config.res_blocks,
-        Config.learning_rate,
+        current_learning_rate,
         Config.ddqn_timing,
         0,
     )
@@ -37,19 +38,26 @@ function main(Config::_Config)
     iter = show_progress ? ProgressBar(1:1_000_000) : 1:1_000_000
     minibatch = get_minibatch()
     for i in iter
-        try
-            minibatch_task = Threads.@spawn get_minibatch()
-            loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
-            show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
-            # open("log.csv", "a") do io
-            #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
-            # end
-            Threads.@spawn update_priority(new_temporal_difference_list)
-            minibatch = fetch(minibatch_task)
-        catch e
-            @error exception = (e, catch_backtrace())
-        finally
-            GC.gc(false)
+        # 学習率を更新する
+        if i % 50_000 == 0
+            current_learning_rate *= 0.1
+            update_learningrate!(learner.optim, current_learning_rate)
+        end
+        @sync begin
+            try
+                minibatch_task = @async get_minibatch()
+                loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
+                show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
+                # open("log.csv", "a") do io
+                #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
+                # end
+                @async update_priority(new_temporal_difference_list)
+                minibatch = fetch(minibatch_task)
+            catch e
+                @error exception = (e, catch_backtrace())
+            finally
+                GC.gc(false)
+            end
         end
     end
 end
@@ -121,7 +129,7 @@ function is_update_time()
     global last_time
     now = time()
     dt = now - last_time
-    if dt > 60.0
+    if dt > 10.0
         last_time = now
         true
     else
@@ -135,11 +143,12 @@ end
 """
 function update_weight(learner::Learner, minibatch, γ)
     loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, minibatch, γ)# i < 10e3 ? 200 :
+
     if UpdateTimer.is_update_time()
-        Threads.@spawn update_model_params("mainmodel", learner.brain.main_model.ps, learner.brain.main_model.st)
+        @async update_model_params("mainmodel", learner.brain.main_model.ps, learner.brain.main_model.st)
     end
     if learner.taget_update_count % learner.taget_update_cycle == 0
-        Threads.@spawn update_model_params("targetmodel", learner.brain.target_model.ps, learner.brain.target_model.st)
+        @async update_model_params("targetmodel", learner.brain.target_model.ps, learner.brain.target_model.st)
     end
     return loss, qmean, tspin, new_temporal_difference_list
 end

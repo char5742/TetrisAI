@@ -8,8 +8,8 @@ import .Component: Experience, Node, Memory, add!, sample, prioritized_sample!, 
 export Experience, Node, Memory, add!, sample, prioritized_sample!, sum_td, update_temporal_difference
 include("ai/lux/Lux.jl")
 using .AILux
-import .AILux: Brain, loadmodel, savemodel, QNetwork, create_optim, set_weightdecay, predict, create_model, Model, gpu, cpu
-export  Brain, loadmodel, savemodel, QNetwork, create_optim, set_weightdecay, predict, create_model, Model, gpu, cpu
+import .AILux: Brain, loadmodel, savemodel, QNetwork, create_optim, update_learningrate!, set_weightdecay, predict, create_model, Model, vector2array, gpu, cpu, f16
+export  Brain, loadmodel, savemodel, QNetwork, create_optim, update_learningrate!, set_weightdecay, predict, create_model, Model, vector2array, gpu, cpu, f16
 include("analyzer.jl")
 export get_node_list, generate_minopos, mino_to_array
 include("actor.jl")

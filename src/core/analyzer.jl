@@ -108,18 +108,21 @@ function get_node_list(
                     for _ in 1:abs(x - new_position.x)
                         push!(action_list, Action(x > new_position.x ? 1 : -1, 0, 0))
                     end
-                    push!(action_list, Action(0, 0, 0, false, true))
-                    for action in action_list
+                    for action in [action_list..., Action(0, 0, 0, 0, true)]
                         action!(state, action)
                     end
-                    tspin = check_tspin(state)
                     put_mino!(state)
                     # 未探索の盤面ならノードとして保存
                     if !haskey(simulated_board_dict, state.current_game_board.binary) || simulated_board_dict[state.current_game_board.binary] > length(action_list)
                         dropped_position = move(new_position, x - new_position.x, y - new_position.y)
                         simulated_board_dict[state.current_game_board.binary] = length(action_list)
-                        node_dict[state.current_game_board.binary] = Node(action_list, new_mino, dropped_position, tspin, state)
+                        node_dict[state.current_game_board.binary] = Node([action_list..., Action(0, 0, 0, 0, true)], new_mino, dropped_position, false, state)
                     end
+                    # ソフトドロップ
+                    for _ in 1:abs(y - new_position.y)
+                        push!(action_list, Action(0, y > new_position.y ? 1 : -1, 0))
+                    end
+
                     # 左右回転
                     for dor in [1, -1]
                         state = GameState(root_state)

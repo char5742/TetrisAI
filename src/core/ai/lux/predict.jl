@@ -48,7 +48,8 @@ function batch_predict(model, data, batch_size)
 
         # Send the batched data to the model
         data_batch = (board_input_prev_batch, minopos_batch, combo_input_batch, back_to_back_batch, tspin_batch, mino_list_batch)  |> gpu
-        response_batch, _ = model.model(data_batch, model.ps, model.st) |> cpu
+        response_batch, _ = model.model(data_batch, model.ps, model.st)
+        response_batch = response_batch |> cpu
         push!(responses, response_batch)
     end
 

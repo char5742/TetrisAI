@@ -28,7 +28,7 @@ function memory_route(request::HTTP.Request)
 end
 
 function get_minibatch(memory::Memory)
-    batch = prioritized_sample!(memory, 16)
+    batch = prioritized_sample!(memory, 16;priority=0.6)
     buffer = IOBuffer()
     serialize(buffer, batch)
     compressed = transcode(ZstdCompressor, take!(buffer))

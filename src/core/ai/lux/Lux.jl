@@ -1,10 +1,10 @@
 module AILux
 using CUDA
 using Lux, LuxCUDA, NNlib, MLUtils, Zygote
-import Lux: gpu_device, cpu_device
+import Lux: gpu_device, cpu_device, f16
 gpu = gpu_device()
 cpu = cpu_device()
-export gpu, cpu
+export gpu, cpu, f16
 using JLD2, Optimisers
 using Statistics, Random
 using NamedTupleTools
@@ -26,5 +26,5 @@ export QNetwork, create_model
 include("predict.jl")
 export predict, vector2array
 include("fit.jl")
-export fit, create_optim, set_weightdecay
+export fit, create_optim, set_weightdecay, update_learningrate!
 end

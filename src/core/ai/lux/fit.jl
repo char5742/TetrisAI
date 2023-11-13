@@ -1,3 +1,14 @@
+"""
+DQNRegLoss
+過小評価することでモデルの汎化性能を上げるloss関数
+https://arxiv.org/pdf/2101.03958.pdf
+"""
+function DQNRegLoss(ŷ, y; weight=0.1)
+    δ = ŷ - y
+    mean(weight * ŷ + δ .^ 2)
+end
+
+
 function fit(model, ps, st, optim, x, y; use_gpu=true)
     if use_gpu
         x = x |> gpu
@@ -6,7 +17,7 @@ function fit(model, ps, st, optim, x, y; use_gpu=true)
     _st = Lux.LuxCore.trainmode(st)
     (trainingloss, st), back = pullback(ps) do ps
         ŷ, st = model(x, ps, _st)
-        mean(abs2.(ŷ .- y)), st
+        DQNRegLoss(ŷ, y), st
     end
     gs = back((one(trainingloss), nothing))[1]
     st = Lux.LuxCore.testmode(st)
@@ -16,8 +27,9 @@ function fit(model, ps, st, optim, x, y; use_gpu=true)
     ps, st, st_opt, trainingloss
 end
 
-create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.AdaBelief(learning_rate), ps)
+create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.Adam(learning_rate), ps)
 
+update_learningrate!(optim, learning_rate) = Optimisers.adjust!(optim, learning_rate)
 
 function set_weightdecay(optim, learning_rate)
     """

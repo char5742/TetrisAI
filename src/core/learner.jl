@@ -118,6 +118,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
             learner.brain.target_model.st = learner.brain.main_model.st
         end
         ps, st, optim, trainingloss = fit(learner.brain.main_model.model, learner.brain.main_model.ps, learner.brain.main_model.st, learner.optim, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array; use_gpu=use_gpu)
+        (isnan(trainingloss) || isinf(trainingloss)) && throw(throw("trainingloss is invalid"))
         learner.brain.main_model.ps = ps
         learner.brain.main_model.st = st
         learner.optim = optim

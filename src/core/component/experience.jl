@@ -6,4 +6,3 @@ mutable struct Experience
     next_node_list::Vector{Node}
     temporal_difference::Float64
 end
-

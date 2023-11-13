@@ -1,14 +1,26 @@
 module Reward
 const reward_category = [-1, 0, 1, 2, 3, 4]
 
-export encode_reward, decode_reward, rescaling_reward, restoring_reward
+export encode_reward, decode_reward, rescaling_reward, inverse_rescaling_reward
 
-function rescaling_reward(v)
-    v / 600
+function rescaling_reward(v; r2d2=false)
+    if r2d2
+        x = abs(v) / 600
+        sign(v) * ((sqrt(x + 1) - 1) + 1e-3 * x)
+    else
+        v / 600
+    end
 end
 
-function restoring_reward(v)
-    (sqrt(v / 600 + 1) - 1)
+function inverse_rescaling_reward(v; r2d2=false)
+    if r2d2
+        ϵ = 1e-3
+        x = abs(v)
+        y = sign(v) * ((((sqrt(1 + 4 * ϵ * (x + 1 + ϵ)) - 1)) / (2 * ϵ))^2 - 1)
+        y * 600
+    else
+        v * 600
+    end
 end
 
 """

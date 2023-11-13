@@ -1,4 +1,3 @@
-import StatsBase
 
 mutable struct Memory
     capacity::Int

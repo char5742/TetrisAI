@@ -7,12 +7,15 @@ using Printf
 using Base.Threads
 using CodecZstd
 using Dates, JLD2
+using Random
+using CUDA
+CUDA.math_mode!(CUDA.DEFAULT_MATH)
 
 actor_id = parse(Int, ARGS[1])
 epsilon = parse(Float64, ARGS[2])
 use_gpu = parse(Bool, ARGS[3])
 
-const root = "http://1270.0.01:10513"
+const root = "http://127.0.0.1:10513"
 const memoryserver = "$root/memory"
 const paramserver = "$root/param"
 
@@ -26,36 +29,39 @@ function main()
         epsilon,
         use_gpu=use_gpu,
     )
-    total_step = 0
     while true
         game_state = GameState()
+        total_step = 0
+        exp_list = Experience[]
         try
             current_step = 0
             while !game_state.game_over_flag
                 current_step += 1
                 exp = onestep!(game_state, actor, current_step)
-                upload_exp(exp)
+                GC.gc(false)
+                push!(exp_list, exp)
                 if actor.id == 1
                     sleep(0.2)
                     draw_game2file(game_state.current_game_board.color[5:end, :]; score=game_state.score)
                 end
                 total_step += 1
             end
-
-            if actor.id == 1
-                open("log.csv", "a") do io
-                    println(io, @sprintf("%s, %d, %3.1f", Dates.format(now(), "yyyy/mm/dd HH:MM:SS"), game_state.score, game_state.score / total_step))
-                end
+            id = actor.id
+            open("output/log_$(id).csv", "a") do io
+                println(io, @sprintf("%s, %d, %3.1f", Dates.format(now(), "yyyy/mm/dd HH:MM:SS"), game_state.score, game_state.score / total_step))
             end
-            total_step = 0
         catch e
             @error exception = (e, catch_backtrace())
             GC.gc(true)
-            total_step = 0
         end
         try
-            # パラメータを取得する
-            update_params(actor; use_gpu=use_gpu)
+            @sync begin
+                for exp in exp_list
+                    @async upload_exp(exp)
+                end
+                # パラメータを取得する
+                @async update_params(actor; use_gpu=use_gpu)
+            end
         catch e
             @error exception = (e, catch_backtrace())
         end
@@ -96,8 +102,8 @@ function initialize_actor(
     try
         ps, st = get_model_params("mainmodel")
         t_ps, t_st = get_model_params("targetmodel")
-    catch
-        # もしサーバーから取得できなくても何もしない
+    catch e
+        @error e
     end
     if use_gpu
         ps, st = (ps, st) .|> gpu
@@ -109,7 +115,7 @@ end
 
 function onestep!(game_state::GameState, actor::Actor, current_step::Int)
     node_list = get_node_list(game_state)
-    node = select_node(actor, node_list, game_state)
+    node = select_node(actor, node_list, game_state, (x...) -> predict(actor.brain.main_model, x))
     tmp_nodelist = get_node_list(node.game_state)
     td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
     exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)

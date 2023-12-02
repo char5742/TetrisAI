@@ -1,7 +1,7 @@
 
 
 function initialize_brain()
-    model, ps, st = create_model(Config.kernel_size, Config.res_blocks, 128; use_gpu=false)
+    model, ps, st = create_model(Config.kernel_size, Config.res_blocks, Config.kernel_size; use_gpu=false)
     t_ps, t_st = ps, st
     if Config.load_params
         _, ps, st = loadmodel("mainmodel.jld2")

@@ -16,7 +16,7 @@ function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
         Conv((3, 3), 2 => kernel_size; pad=SamePad()),
         BatchNorm(kernel_size; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
-        Chain([Chain(ResNetBlock(kernel_size), se_block(kernel_size)) for _ in 1:resblock_size]),
+        Chain([Chain(ResNetBlock(kernel_size)) for _ in 1:resblock_size]),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
@@ -50,26 +50,26 @@ struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :boa
 end
 function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     raw_board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
-    board_feature = unsqueeze(raw_board_feature, dims=1)
-    board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
-    combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
-    combo_feature = unsqueeze(combo_feature, dims=2)
-    btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)
-    btb_feature = unsqueeze(btb_feature, dims=2)
-    tspin_feature, _ = m.tspin_encoder(tspin, ps.tspin_encoder, st.tspin_encoder)
-    tspin_feature = unsqueeze(tspin_feature, dims=2)
-    mino_list_feature, _ = m.mino_list_encoder(mino_list, ps.mino_list_encoder, st.mino_list_encoder)
-    z = hcat(board_feature, combo_feature, btb_feature, tspin_feature)
+    # board_feature = unsqueeze(raw_board_feature, dims=1)
+    # board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
+    # combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
+    # combo_feature = unsqueeze(combo_feature, dims=2)
+    # btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)
+    # btb_feature = unsqueeze(btb_feature, dims=2)
+    # tspin_feature, _ = m.tspin_encoder(tspin, ps.tspin_encoder, st.tspin_encoder)
+    # tspin_feature = unsqueeze(tspin_feature, dims=2)
+    # mino_list_feature, _ = m.mino_list_encoder(mino_list, ps.mino_list_encoder, st.mino_list_encoder)
+    # z = hcat(board_feature, combo_feature, btb_feature, tspin_feature, mino_list_feature)
 
-    attentioned, st_attention = m.attention((mino_list_feature, z, nothing), ps.attention, st.attention)
-    score, st_score_net = m.score_net(attentioned, ps.score_net, st.score_net)
+    # attentioned, st_attention = m.attention((z, nothing), ps.attention, st.attention)
+    # score, st_score_net = m.score_net(attentioned, ps.score_net, st.score_net)
 
-    # z = vcat(raw_board_feature, combo_normalize(ren), btb, tspin, flatten(mino_list))
-    # score, st_score_net = m.score_net(z, ps.score_net, st.score_net)
+    z = vcat(raw_board_feature, combo_normalize(ren), btb, tspin, flatten(mino_list))
+    score, st_score_net = m.score_net(z, ps.score_net, st.score_net)
     st = merge(st, (
         board_net=st_board_net,
         score_net=st_score_net,
-        attention=st_attention,
+        # attention=st_attention,
     ))
     score, st
 end
@@ -87,32 +87,32 @@ arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)
 return score  
 """
 function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::Int64)
-    matrix_size = 128
-    nheads = 8
-    return Chain(
-        _QNetwork(
-            BoardNet(kernel_size, resblock_size, boardhidden_size),
-            Dense(1 => matrix_size, gelu),
-            Dense(1 => matrix_size, gelu),
-            Dense(1 => matrix_size, gelu),
-            Dense(1 => matrix_size, gelu),
-            Dense(7 => matrix_size, gelu),
-            attention(6,boardhidden_size + 3, matrix_size, nheads),
-            ScoreNetSimple(6*matrix_size),
-        )
-    )
-    # Chain(
+    matrix_size = 48
+    nheads = 3
+    # return Chain(
     #     _QNetwork(
     #         BoardNet(kernel_size, resblock_size, boardhidden_size),
-    #         NoOpLayer(),
-    #         NoOpLayer(),
-    #         NoOpLayer(),
-    #         NoOpLayer(),
-    #         NoOpLayer(),
-    #         NoOpLayer(),
-    #         ScoreNetSimple(boardhidden_size + 3 + 42),
+    #         Dense(1 => matrix_size, gelu),
+    #         Dense(1 => matrix_size, gelu),
+    #         Dense(1 => matrix_size, gelu),
+    #         Dense(1 => matrix_size, gelu),
+    #         Dense(7 => matrix_size, gelu),
+    #         attention(boardhidden_size + 3 + 6, matrix_size, nheads),
+    #         ScoreNetSimple(boardhidden_size + 3 + 6),
     #     )
     # )
+    Chain(
+        _QNetwork(
+            BoardNet(kernel_size, resblock_size, boardhidden_size),
+            NoOpLayer(),
+            NoOpLayer(),
+            NoOpLayer(),
+            NoOpLayer(),
+            NoOpLayer(),
+            NoOpLayer(),
+            ScoreNetSimple(boardhidden_size + 3 + 42),
+        )
+    )
 end
 
 # 1_258_497, kernel_size=32, res_blocks=4,
@@ -123,6 +123,7 @@ function ResNetBlock(n)
         swish,
         Conv((3, 3), n => n, pad=SamePad()),
         BatchNorm(n; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
+        se_block(n),
     )
 
     return Chain(SkipConnection(layers, +), swish)
@@ -147,19 +148,19 @@ return: score
 """
 function ScoreNetSimple(features)
     Chain(
-        Dense(features => 1024, swish),
+        Dense(features => 4096, swish),
+        Dense(4096 => 1024, swish),
         Dense(1024 => 256, swish),
-        Dense(256 => 1),
+        Dense(256 => 64, swish),
+        Dense(64 => 1),
     )
 end
 
-function attention(query_len, encoder_len, matrix_size, nheads)
+function attention(seq_len, matrix_size, nheads)
     features = matrix_size
     Decoder(
         Dense(matrix_size => features),
-        PositionalEncodingLayer(features, query_len),
-        Dense(matrix_size => features),
-        PositionalEncodingLayer(features, encoder_len),
+        PositionalEncodingLayer(features, seq_len),
         Chain([
             DecoderBlock(
                 MultiHeadAttention(
@@ -170,15 +171,15 @@ function attention(query_len, encoder_len, matrix_size, nheads)
                     Dense(features => features),
                     nheads
                 ),
-                LayerNorm((features, query_len)),
+                LayerNorm((features, seq_len)),
                 Chain(Dense(features => features * 4, gelu), Dense(features * 4 => features), Dropout(0.0)),
                 Dropout(0.0),
-                LayerNorm((features, query_len))
+                LayerNorm((features, seq_len))
             )
-            for i in 1:3
+            for i in 1:6
         ]),
         Chain(
-            # GlobalMeanPool(),
+            GlobalMeanPool(),
             FlattenLayer(),
         ),
     )

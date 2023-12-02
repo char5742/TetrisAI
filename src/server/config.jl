@@ -14,9 +14,9 @@ end
 
 Config = _Config(
     load_params=false,
-    kernel_size=128,
+    kernel_size=256,
     res_blocks=5,
-    γ=0.93,
+    γ=0.95,
     ddqn_timing=400,
     learning_rate=1.0f-4,
     batchsize=16,

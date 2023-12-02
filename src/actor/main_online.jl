@@ -97,7 +97,7 @@ function initialize_actor(
     epsilon::Float64;
     use_gpu=false
 )
-    model, ps, st = create_model(kernel_size, resblock_size, 128; use_gpu=use_gpu)
+    model, ps, st = create_model(kernel_size, resblock_size, kernel_size; use_gpu=use_gpu)
     t_ps, t_st = ps, st
     try
         ps, st = get_model_params("mainmodel")

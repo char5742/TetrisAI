@@ -163,7 +163,7 @@ function initialize_learner(
     taget_update_cycle::Int64,
     taget_update_count::Int64,
 )::Learner
-    model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, 128)
+    model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, kernel_size)
     display(model)
     ps, st = get_model_params("mainmodel") .|> gpu
     t_ps, t_st = get_model_params("targetmodel") .|> gpu

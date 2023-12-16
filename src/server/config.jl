@@ -8,7 +8,6 @@ Base.@kwdef struct _Config
     learning_rate::Float32
     batchsize::Int
     memoryscale::Int
-    epsilon_list::Vector{Float32}
 end
 
 
@@ -21,10 +20,6 @@ Config = _Config(
     learning_rate=1.0f-4,
     batchsize=16,
     memoryscale=16^3,
-    epsilon_list=Float32[
-        0, 0, 0.01, 0.05,
-        0.1,
-    ],
 )
 
 function config_route(request::HTTP.Request)

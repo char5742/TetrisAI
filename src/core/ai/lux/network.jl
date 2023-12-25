@@ -14,11 +14,17 @@ struct BoardNet <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv1, :norm1, :
 end
 function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
-        Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        BatchNorm(kernel_size; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
-        Chain([Chain(ResNetBlock(kernel_size)) for _ in 1:resblock_size]),
+        Conv((3, 3), 2 => kernel_size ÷ 2; pad=SamePad()),
+        # LayerNorm((24, 10, kernel_size); epsilon=Float16(1.0f-5)),
+        BatchNorm(kernel_size ÷ 2; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
+        Chain(
+            [ResNetBlock(kernel_size ÷ 2) for _ in 1:resblock_size]...,
+            Conv((3, 3), kernel_size ÷ 2 => kernel_size; pad=SamePad()),
+            LayerNorm((24, 10, kernel_size), swish; epsilon=Float16(1.0f-6)),
+            [ConvNeXtBlock(kernel_size) for _ in 1:resblock_size]...,
+        ),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
-        BatchNorm(output_size; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
+        BatchNorm(output_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
     )
 end
@@ -31,7 +37,7 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, _ = m.conv2(z, ps.conv2, st.conv2)
     z, st_norm2 = m.norm2(z, ps.norm2, st.norm2)
     z = swish(z)
-    z, _ = m.gmp(z, ps.gmp, st.gmp)
+    # z, _ = m.gmp(z, ps.gmp, st.gmp)
     z = flatten(z)
     # z = reshape(z, (240, size(z, 3), size(z, 4)))
     st = merge(st, (norm2=st_norm2, norm1=st_norm1, resblocks=st_resblocks))
@@ -103,14 +109,14 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     # )
     Chain(
         _QNetwork(
-            BoardNet(kernel_size, resblock_size, boardhidden_size),
+            BoardNet(kernel_size, resblock_size, 1),
             NoOpLayer(),
             NoOpLayer(),
             NoOpLayer(),
             NoOpLayer(),
             NoOpLayer(),
             NoOpLayer(),
-            ScoreNetSimple(boardhidden_size + 3 + 42),
+            ScoreNetSimple(240 + 3 + 42),
         )
     )
 end
@@ -119,8 +125,7 @@ end
 function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
-        BatchNorm(n; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
-        swish,
+        BatchNorm(n, swish; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
         Conv((3, 3), n => n, pad=SamePad()),
         BatchNorm(n; epsilon=Float16(1.0f-5), momentum=Float16(0.1f0)),
         se_block(n),
@@ -129,6 +134,18 @@ function ResNetBlock(n)
     return Chain(SkipConnection(layers, +), swish)
 end
 
+function ConvNeXtBlock(n)
+    layers = Chain(
+        Conv((5, 5), n => n; pad=SamePad(), groups=n),
+        LayerNorm((24, 10, n); epsilon=Float16(1.0f-6)),
+        WrappedFunction(x -> permutedims(x, (3, 1, 2, 4))),
+        Dense(n => 4n, gelu),
+        Dense(4n => n),
+        WrappedFunction(x -> permutedims(x, (2, 3, 1, 4))),
+    )
+
+    return SkipConnection(layers, +)
+end
 
 function se_block(ch, ratio=4)
     layers = Chain(
@@ -148,11 +165,9 @@ return: score
 """
 function ScoreNetSimple(features)
     Chain(
-        Dense(features => 4096, swish),
-        Dense(4096 => 1024, swish),
+        Dense(features => 1024, swish),
         Dense(1024 => 256, swish),
-        Dense(256 => 64, swish),
-        Dense(64 => 1),
+        Dense(256 => 1),
     )
 end
 

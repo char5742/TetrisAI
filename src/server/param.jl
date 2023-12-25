@@ -63,4 +63,5 @@ function set_targetmodel_param(brain::Brain, body)
     brain.target_model.st = st
     savemodel("targetmodel.jld2", brain.target_model)
     HTTP.Response(200, "OK")
+    GC.gc(true)
 end

@@ -42,7 +42,7 @@ function Optimisers.apply!(o::WeightDecayWithEta, state, x::AbstractArray{T}, dx
 end
 
 
-create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.  OptimiserChain(Adam(learning_rate, (0.9, 0.95)), WeightDecayWithEta(learning_rate, 0.01)), ps)
+create_optim(learning_rate, ps) = Optimisers.setup(Optimisers.OptimiserChain(Adam(learning_rate, (0.9, 0.999)), WeightDecayWithEta(learning_rate, 0.05)), ps)
 
 update_learningrate!(optim, learning_rate) = Optimisers.adjust!(optim, learning_rate)
 

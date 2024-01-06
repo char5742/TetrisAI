@@ -1,10 +1,12 @@
 using Tetris
 include("../../core/TetrisAICore.jl")
 import .TetrisAICore: loadmodel, predict, Model,
-    GameState, MoveState, Action, valid_movement,
+    GameState, MoveState, Action, is_valid_mino_movement,
     move, put_mino!, generate_minopos, get_node_list,
-    Node, draw_game, init_screen, get_key_state, mysleep,
+    Node,
     mino_to_array, AILux, create_model, select_node, vector2array
+import Tetris:
+    is_valid_mino_movement, CursesModel, update, set_state!, init, fin, sleep60fps
 using CUDA
 using JLD2
 using HTTP
@@ -32,21 +34,25 @@ end
 using .TetrisAICore
 
 function main()
-    # model, _, _ = create_model(128, 5, 128; use_gpu=true)
     model, ps, st = loadmodel("mainmodel.jld2")
     display(model)
     ps = ps |> gpu
     st = st |> gpu
-    open("log.csv", "w") do f
-        println(f, "mscore")
+    game_state = GameState()
+    move_state = MoveState()
+    display_model = CursesModel()
+    try
+        init(display_model)
+        ai(Model(model, ps, st), game_state, move_state, display_model)
+    catch e
+        open("error.log", "w") do io
+            showerror(io, e, catch_backtrace())
+        end
+        rethrow(e)
+    finally
+        fin(display_model)
     end
-    for _ in 1:1000
-        game_state = GameState()
-        move_state = MoveState()
-        # init_screen()
-        ai(Model(model, ps, st), game_state, move_state)
-    end
-    # endwin()
+
 end
 
 """
@@ -56,13 +62,13 @@ predicter: 盤面価値の予測関数
 """
 function select_node(node_list::Vector{Node}, state::GameState, predicter::Function)::Node
     currentbord = state.current_game_board.binary
-    current_combo = state.combo
+    current_ren = state.ren
     current_back_to_back = state.back_to_back_flag
     current_holdnext = [state.hold_mino, state.mino_list[end-4:end]...]
     minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in node_list] |> vector2array
     tspin_array = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in node_list] |> vector2array
     currentbord_array = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
-    current_combo_array = [current_combo |> Float32 for _ in 1:length(node_list)] |> vector2array
+    current_ren_array = [current_ren |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_holdnext_array = repeat(hcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     # use 
@@ -72,7 +78,7 @@ function select_node(node_list::Vector{Node}, state::GameState, predicter::Funct
         current_holdnext_array[:, 1, :] .= 0
     end
     score_list =
-        predicter(currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array)
+        predicter(currentbord_array, minopos_array, current_ren_array, current_back_to_back_array, tspin_array, current_holdnext_array)
     if any(isnan, score_list) || any(isinf, score_list)
         throw("score_list is invalid")
     end
@@ -82,9 +88,10 @@ function select_node(node_list::Vector{Node}, state::GameState, predicter::Funct
 end
 
 
-function ai(model, game_state::GameState, move_state::MoveState)
+function ai(model, game_state::GameState, move_state::MoveState, display::CursesModel)
     # ゲームオーバーになるまで繰り返す
-    draw_game(game_state)
+    set_state!(display, game_state)
+    update(display)
     start_time = time_ns()
     step = 0
     while !game_state.game_over_flag
@@ -92,57 +99,27 @@ function ai(model, game_state::GameState, move_state::MoveState)
         node = select_node(node_list, game_state, (x...) -> predict(model, x))
         step += 1
         for action in node.action_list
-            get_key_state(:VK_ESCAPE) == 1 && exit()
-            if move_state.set_count > 0 && (action.x != 0 || action.y != 0 || action.rotate != 0) && move_state.set_safe_cout < 15
-                move_state.set_safe_cout += 1
-                move_state.set_count = 0
-            end
+            key_state = get_current_key_state()
+            is_pushed(key_state, :VK_ESCAPE) == 1 && exit()
+
             action!(game_state, action)
 
+            fall!(move_state, game_state, action)
+            put_mino!(move_state, game_state)
 
-            move_state.fall_count += 1
-            if move_state.fall_count == 60
-                move_state.fall_count = 0
-                action = Action(0, 1, 0)
-                if valid_movement(game_state.current_mino, game_state.current_position, game_state.current_game_board.binary, 0, 1)
-                    game_state.current_position = move(game_state.current_position, 0, 1)
-                    move_state.set_count = 0
-                end
-            end
-
-            if !valid_movement(game_state.current_mino, game_state.current_position, game_state.current_game_board.binary, 0, 1)
-                move_state.set_count += 1
-            end
-            if move_state.set_count == 30 || game_state.hard_drop_flag
-                move_state.set_count = 0
-                move_state.set_safe_cout = 0
-                put_mino!(game_state)
-
-            end
-
-            # sleep30fps(start_time)
+            sleep60fps(start_time)
             start_time = time_ns()
-            draw_game(game_state; step=step)
+            set_state!(display, game_state)
+            update(display, step)
         end
-        if step == 250
-            game_end!(game_state)
-        end
-    end
-    open("log.csv", "a") do f
-        println(f, game_state.score)
     end
 end
 
-function sleep30fps(start_time)
-    diff = (1 / 30) - (time_ns() - start_time) / 1e9
-    if diff < 0
-        return false
-    else
-        mysleep(diff)
-        return true
-    end
+function Tetris.update(d::CursesModel, step)
+    update(d)
+    Tetris.Curses.mvaddstr(11, 34, string("mscore: ", d.score / step))
+    Tetris.Curses.refresh()
 end
-
 
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

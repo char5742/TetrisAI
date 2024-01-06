@@ -30,24 +30,17 @@ function param_route(request::HTTP.Request)
 end
 
 function get_mainmodel_param(brain::Brain)
-    buffer = IOBuffer()
-    serialize(buffer, (brain.main_model.ps, brain.main_model.st))
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    HTTP.Response(200, compressed)
+    data = serialize((brain.main_model.ps, brain.main_model.st))
+    HTTP.Response(200, data)
 end
 
 function get_targetmodel_param(brain::Brain)
-    buffer = IOBuffer()
-    serialize(buffer, (brain.target_model.ps, brain.target_model.st))
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    HTTP.Response(200, compressed)
+    data = serialize((brain.target_model.ps, brain.target_model.st))
+    HTTP.Response(200, data)
 end
 
 function set_mainmodel_param(brain::Brain, body)
-    buffer = IOBuffer(body)
-    stream = ZstdDecompressorStream(buffer)
-    ps, st = deserialize(stream)
-    close(stream)
+    ps, st = deserialize(body)
     brain.main_model.ps = ps
     brain.main_model.st = st
     savemodel("mainmodel.jld2", brain.main_model)
@@ -55,10 +48,7 @@ function set_mainmodel_param(brain::Brain, body)
 end
 
 function set_targetmodel_param(brain::Brain, body)
-    buffer = IOBuffer(body)
-    stream = ZstdDecompressorStream(buffer)
-    ps, st = deserialize(stream)
-    close(stream)
+    ps, st = deserialize(body)
     brain.target_model.ps = ps
     brain.target_model.st = st
     savemodel("targetmodel.jld2", brain.target_model)

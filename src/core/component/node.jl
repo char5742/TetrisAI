@@ -1,9 +1,9 @@
 "探索されたゲームの状態"
 struct Node
     "この状態になるための行動"
-    action_list::Vector{Action}
+    action_list::Vector{AbstractAction}
     "固定前のミノ"
-    mino::Mino
+    mino::AbstractMino
     "固定前の位置"
     position::Position
     tspin::Int64

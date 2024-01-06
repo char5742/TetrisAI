@@ -2,7 +2,7 @@ cat3(args...) = cat(args..., dims=3)
 
 neg(x::AbstractArray{T}) where {T} = T(-1.0) * x .+ T(1.0)
 
-combo_normalize(x::AbstractArray{T}) where {T} = x / T(30.0f0)
+ren_normalize(x::AbstractArray{T}) where {T} = x / T(30.0f0)
 
 struct BoardNet <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv1, :norm1, :resblocks, :conv2, :norm2, :gmp)}
     conv1
@@ -14,14 +14,10 @@ struct BoardNet <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv1, :norm1, :
 end
 function BoardNet(kernel_size, resblock_size, output_size)
     return BoardNet(
-        Conv((3, 3), 2 => kernel_size ÷ 2; pad=SamePad()),
-        # LayerNorm((24, 10, kernel_size); epsilon=Float16(1.0f-5)),
-        BatchNorm(kernel_size ÷ 2; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
+        Conv((3, 3), 2 => kernel_size; pad=SamePad()),
+        BatchNorm(kernel_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
         Chain(
-            [ResNetBlock(kernel_size ÷ 2) for _ in 1:resblock_size]...,
-            Conv((3, 3), kernel_size ÷ 2 => kernel_size; pad=SamePad()),
-            LayerNorm((24, 10, kernel_size), swish; epsilon=Float16(1.0f-6)),
-            [ConvNeXtBlock(kernel_size) for _ in 1:resblock_size]...,
+            [ResNetBlock(kernel_size) for _ in 1:resblock_size]...,
         ),
         Conv((3, 3), kernel_size => output_size; pad=SamePad()),
         BatchNorm(output_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
@@ -44,10 +40,10 @@ function (m::BoardNet)((board, minopos), ps, st)
     z, st
 end
 
-struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :board_encoder, :combo_encoder, :btb_encoder, :tspin_encoder, :mino_list_encoder, :attention, :score_net)}
+struct _QNetwork <: Lux.LuxCore.AbstractExplicitContainerLayer{(:board_net, :board_encoder, :ren_encoder, :btb_encoder, :tspin_encoder, :mino_list_encoder, :attention, :score_net)}
     board_net
     board_encoder
-    combo_encoder
+    ren_encoder
     btb_encoder
     tspin_encoder
     mino_list_encoder
@@ -58,19 +54,19 @@ function (m::_QNetwork)((board, minopos, ren, btb, tspin, mino_list), ps, st)
     raw_board_feature, st_board_net = m.board_net((board, minopos), ps.board_net, st.board_net)
     # board_feature = unsqueeze(raw_board_feature, dims=1)
     # board_feature, _ = m.board_encoder(board_feature, ps.board_encoder, st.board_encoder)
-    # combo_feature, _ = m.combo_encoder(combo_normalize(ren), ps.combo_encoder, st.combo_encoder)
-    # combo_feature = unsqueeze(combo_feature, dims=2)
+    # ren_feature, _ = m.ren_encoder(ren_normalize(ren), ps.ren_encoder, st.ren_encoder)
+    # ren_feature = unsqueeze(ren_feature, dims=2)
     # btb_feature, _ = m.btb_encoder(btb, ps.btb_encoder, st.btb_encoder)
     # btb_feature = unsqueeze(btb_feature, dims=2)
     # tspin_feature, _ = m.tspin_encoder(tspin, ps.tspin_encoder, st.tspin_encoder)
     # tspin_feature = unsqueeze(tspin_feature, dims=2)
     # mino_list_feature, _ = m.mino_list_encoder(mino_list, ps.mino_list_encoder, st.mino_list_encoder)
-    # z = hcat(board_feature, combo_feature, btb_feature, tspin_feature, mino_list_feature)
+    # z = hcat(board_feature, ren_feature, btb_feature, tspin_feature, mino_list_feature)
 
     # attentioned, st_attention = m.attention((z, nothing), ps.attention, st.attention)
     # score, st_score_net = m.score_net(attentioned, ps.score_net, st.score_net)
 
-    z = vcat(raw_board_feature, combo_normalize(ren), btb, tspin, flatten(mino_list))
+    z = vcat(raw_board_feature, ren_normalize(ren), btb, tspin, flatten(mino_list))
     score, st_score_net = m.score_net(z, ps.score_net, st.score_net)
     st = merge(st, (
         board_net=st_board_net,
@@ -84,12 +80,12 @@ end
 """
 bord_input_prev: size(24,10, 1, B)  現在の盤面
 minopos: size(24,10, 1, B) ミノの配置箇所
-combo_input: size(1,B) コンボ数
+ren_input: size(1,B) コンボ数
 back_to_back: size(1,B)
 tspin: size(1, B)
 mino_list: size(7, 6, B) HOLD+NEXT
 
-arg: (bord_input_prev ,minopos, combo_input,back_to_back, tspin, mino_list)  
+arg: (bord_input_prev ,minopos, ren_input,back_to_back, tspin, mino_list)  
 return score  
 """
 function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::Int64)
@@ -220,13 +216,13 @@ end
 function warmup(model, ps, st; use_gpu=true)
     board = rand(24, 10, 1, 1)
     minopos = rand(24, 10, 1, 1)
-    combo = rand(1, 1)
+    ren = rand(1, 1)
     btb = rand(1, 1)
     tspin = rand(1, 1)
     mino_list = rand(7, 6, 1)
     if (use_gpu)
-        model((board, minopos, combo, btb, tspin, mino_list) |> gpu, ps, st) |> cpu
+        model((board, minopos, ren, btb, tspin, mino_list) |> gpu, ps, st) |> cpu
     else
-        model((board, minopos, combo, btb, tspin, mino_list), ps, st) |> cpu
+        model((board, minopos, ren, btb, tspin, mino_list), ps, st) |> cpu
     end
 end

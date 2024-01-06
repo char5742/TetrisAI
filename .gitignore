@@ -3,3 +3,7 @@
 output/*
 data/*
 model/*
+*.log
+*.jld2
+*.csv
+*.svg

@@ -1,14 +1,13 @@
 include("../core/TetrisAICore.jl")
 using .TetrisAICore
 using Tetris
-using Serialization
 using HTTP
 using Printf
 using Base.Threads
-using CodecZstd
 using Dates
 using Random
 using CUDA
+import Serialization
 # CUDA.math_mode!(CUDA.FAST_MATH;precision=:BFloat16)
 actor_id = parse(Int, ARGS[1])
 epsilon = parse(Float64, ARGS[2])
@@ -19,6 +18,7 @@ const memoryserver = "$root/memory"
 const paramserver = "$root/param"
 
 include("config.jl")
+include("../lib/compress.jl")
 
 function main()
     actor = initialize_actor(
@@ -102,8 +102,8 @@ function initialize_actor(
         # もしサーバーから取得できなくても何もしない
     end
     if use_gpu
-        ps, st = (ps, st)  .|> gpu
-        t_ps, t_st = (t_ps, t_st)  .|> gpu
+        ps, st = (ps, st) .|> gpu
+        t_ps, t_st = (t_ps, t_st) .|> gpu
     end
     brain = Brain(Model(model, ps, st), Model(model, t_ps, t_st))
     return Actor(actor_id, epsilon, brain)
@@ -112,14 +112,14 @@ end
 function onestep!(game_state::GameState, actor::Actor, current_step::Int)
     node_list = get_node_list(game_state)
 
-   node = select_node(actor, node_list, game_state, (x...) -> predict(actor.brain.main_model, x))
+    node = select_node(actor, node_list, game_state, (x...) -> predict(actor.brain.main_model, x))
     GC.gc(false)
 
     tmp_nodelist = get_node_list(node.game_state)
     td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
     GC.gc(false)
 
-    exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)
+    exp = Experience(GameState(game_state), node, td_error)
     for action in node.action_list
         action!(game_state, action)
     end
@@ -138,9 +138,7 @@ return ps, st
 function get_model_params(name::String)
     res = HTTP.request("GET", "$paramserver/$name")
     if res.status == 200
-        buffer = IOBuffer(res.body)
-        stream = ZstdDecompressorStream(buffer)
-        ps, st = deserialize(stream)
+        ps, st = deserialize(res.body)
     else
         throw("Paramサーバーからparamを取得できませんでした")
     end
@@ -151,10 +149,7 @@ end
 経験をmemoryサーバーに送信する
 """
 function upload_exp(exp::Experience)
-    buffer = IOBuffer()
-    serialize(buffer, exp)
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    res = HTTP.request("POST", memoryserver, body=compressed)
+    res = HTTP.request("POST", memoryserver, body=serialize(exp))
     if res.status != 200
         throw("Memoryサーバーに経験を送信できませんでした")
     end

@@ -1,9 +1,10 @@
 using HTTP
 include("../core/TetrisAICore.jl")
 using .TetrisAICore
-using Serialization
-using CodecZstd
+import Serialization
 include("config.jl")
+include("../lib/compress.jl")
+
 include("memory.jl")
 include("param.jl")
 

@@ -9,13 +9,13 @@ Base.@kwdef struct _Config
     batchsize::Int
     memoryscale::Int
     epsilon_list::Vector{Float32}
+    compress::Bool
 end
 
 function get_config()
     r= HTTP.request("GET", "$server/config")
     if r.status == 200
-        buffer = IOBuffer(r.body)
-        config = deserialize(buffer)
+        config = Serialization.deserialize(r.body)
     else
         throw("Configを取得できませんでした")
     end

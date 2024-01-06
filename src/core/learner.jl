@@ -27,13 +27,13 @@ function calc_expected_rewards(
     if (any(!node.game_state.game_over_flag for node in node_list))
         node_currentboard_array = [node.game_state.current_game_board.binary .|> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
         max_node_minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in max_node_list if !isnothing(n)] |> vector2array
-        node_combo_array = [node.game_state.combo |> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
+        node_ren_array = [node.game_state.ren |> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
         node_back_to_back_array = [node.game_state.back_to_back_flag |> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
         max_node_tspin_array = [node.tspin |> Float32 for node in max_node_list if !isnothing(node)] |> vector2array
         node_holdnext = reduce((x, y) -> cat(x, y, dims=3), reshape(hcat([mino_to_array(mino) for mino in [node.game_state.hold_mino, node.game_state.mino_list[end-4:end]...]]...), 7, 6, 1) for node in node_list if !node.game_state.game_over_flag)
         next_score_list =
             predict(brain.target_model,
-                (node_currentboard_array, max_node_minopos_array, node_combo_array, node_back_to_back_array, max_node_tspin_array, node_holdnext
+                (node_currentboard_array, max_node_minopos_array, node_ren_array, node_back_to_back_array, max_node_tspin_array, node_holdnext
                 ))
     end
     response = Vector{Tuple{Float64,Float64}}(undef, calc_size)
@@ -61,7 +61,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
     try
         # 行動前の状態
         prev_game_board_array = Array{Float32}(undef, 24, 10, 1, batch_size)
-        prev_combo_array = Array{Float32}(undef, 1, batch_size)
+        prev_ren_array = Array{Float32}(undef, 1, batch_size)
         prev_back_to_back_array = Array{Float32}(undef, 1, batch_size)
         prev_holdnext_array = Array{Float32}(undef, 7, 6, batch_size)
         # 行動前後の差分 (ミノの設置位置を示す)
@@ -81,24 +81,23 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         for (i, (id, (;
             current_state,
             selected_node,
-            next_node_list,
             temporal_difference
         ))) in collect(enumerate(id_and_exp))
             prev_game_board_array[:, :, 1, i] = current_state.current_game_board.binary
             minopos_array[:, :, 1, i] = generate_minopos(selected_node.mino, selected_node.position)
-            prev_combo_array[i] = current_state.combo
+            prev_ren_array[i] = current_state.ren
             prev_back_to_back_array[i] = current_state.back_to_back_flag
             prev_tspin_array[i] = selected_node.tspin
             prev_holdnext_array[:, :, i] = hcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
 
             prev_score_list[i] = current_state.score
-            next_node_list_list[i] = next_node_list
+            next_node_list_list[i] = get_node_list(selected_node.game_state)
             selected_node_list[i] = selected_node
         end
         current_expect_reward_array =
             predict(learner.brain.main_model,
                 (prev_game_board_array, minopos_array,
-                    prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array))
+                    prev_ren_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array))
 
         res = calc_expected_rewards(
             learner.brain,
@@ -117,7 +116,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
             learner.brain.target_model.ps = learner.brain.main_model.ps
             learner.brain.target_model.st = learner.brain.main_model.st
         end
-        ps, st, optim, trainingloss = fit(learner.brain.main_model.model, learner.brain.main_model.ps, learner.brain.main_model.st, learner.optim, (prev_game_board_array, minopos_array, prev_combo_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array; use_gpu=use_gpu)
+        ps, st, optim, trainingloss = fit(learner.brain.main_model.model, learner.brain.main_model.ps, learner.brain.main_model.st, learner.optim, (prev_game_board_array, minopos_array, prev_ren_array, prev_back_to_back_array, prev_tspin_array, prev_holdnext_array), expected_reward_array; use_gpu=use_gpu)
         (isnan(trainingloss) || isinf(trainingloss)) && throw(throw("trainingloss is invalid"))
         learner.brain.main_model.ps = ps
         learner.brain.main_model.st = st

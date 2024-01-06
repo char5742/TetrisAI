@@ -9,6 +9,7 @@ Base.@kwdef struct _Config
     batchsize::Int
     memoryscale::Int
     epsilon_list::Vector{Float32}
+    compress::Bool
 end
 
 
@@ -25,13 +26,14 @@ Config = _Config(
         0, 0, 0.01, 0.05,
         0.1,
     ],
+    compress=false,
 )
 
 function config_route(request::HTTP.Request)
     target = request.target
     if contains(target, "/config")
         buffer = IOBuffer()
-        serialize(buffer, Config)
+        Serialization.serialize(buffer, Config)
         return HTTP.Response(200, take!(buffer))
     end
     nothing

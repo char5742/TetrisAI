@@ -66,7 +66,7 @@ end
 
 
 function get_node_list(
-    mino::Mino, root_state::GameState; hold=false
+    mino::AbstractMino, root_state::GameState; hold=false
 )::Vector{Node}
     node_dict = Dict{Matrix{Int64},Node}()
     # 既に探索済みの盤面。keyは盤面の配列、valueは行動数で少ない方が良い。
@@ -74,7 +74,7 @@ function get_node_list(
     start_position = Position(mino)
 
     for r in 1:4
-        rotate_action_list = Vector{Action}()
+        rotate_action_list = Vector{AbstractAction}()
         # 無回転
         if r == 1
             new_mino = mino
@@ -104,19 +104,19 @@ function get_node_list(
                     state = GameState(root_state)
                     y, x = Tuple(i)
                     x -= 2
-                    action_list = Action[Action(0, 0, 0, hold, false), rotate_action_list...]
+                    dropped_position = Position(x, y)
+                    action_list = AbstractAction[Action(0, 0, 0, hold, false), rotate_action_list...]
                     for _ in 1:abs(x - new_position.x)
                         push!(action_list, Action(x > new_position.x ? 1 : -1, 0, 0))
                     end
-                    for action in [action_list..., Action(0, 0, 0, 0, true)]
+                    for action in [action_list..., Action(0, 0, 0, false, true)]
                         action!(state, action)
                     end
                     put_mino!(state)
                     # 未探索の盤面ならノードとして保存
                     if !haskey(simulated_board_dict, state.current_game_board.binary) || simulated_board_dict[state.current_game_board.binary] > length(action_list)
-                        dropped_position = move(new_position, x - new_position.x, y - new_position.y)
                         simulated_board_dict[state.current_game_board.binary] = length(action_list)
-                        node_dict[state.current_game_board.binary] = Node([action_list..., Action(0, 0, 0, 0, true)], new_mino, dropped_position, false, state)
+                        node_dict[state.current_game_board.binary] = Node([action_list..., Action(0, 0, 0, false, true)], new_mino, dropped_position, false, state)
                     end
                     # ソフトドロップ
                     for _ in 1:abs(y - new_position.y)
@@ -126,10 +126,9 @@ function get_node_list(
                     # 左右回転
                     for dor in [1, -1]
                         state = GameState(root_state)
-                        dropped_position = move(new_position, x - new_position.x, y - new_position.y)
-                        rotated_mino, rotated_position, check = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
+                        rotated_mino, rotated_position, has_rotate = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
                         # 回転可能で、設置可能位置の場合
-                        if check && !valid_movement(rotated_mino, rotated_position, root_state.current_game_board.binary, 0, 1)
+                        if has_rotate && !is_valid_mino_movement(rotated_mino, rotated_position, root_state.current_game_board.binary, 0, 1)
                             for action in [action_list..., Action(0, 0, dor)]
                                 action!(state, action)
                             end
@@ -137,7 +136,7 @@ function get_node_list(
                             put_mino!(state)
                             if !haskey(simulated_board_dict, state.current_game_board.binary) || simulated_board_dict[state.current_game_board.binary] > length(action_list)
                                 simulated_board_dict[state.current_game_board.binary] = length(action_list)
-                                node_dict[state.current_game_board.binary] = Node([action_list..., Action(0, 0, dor), Action(0, 0, 0, 0, true)], rotated_mino, rotated_position, tspin, state)
+                                node_dict[state.current_game_board.binary] = Node([action_list..., Action(0, 0, dor), Action(0, 0, 0, false, true)], rotated_mino, rotated_position, tspin, state)
                             end
                         end
                     end
@@ -151,7 +150,7 @@ end
 """
 ミノの固定位置を示した配列を生成する
 """
-function generate_minopos(mino::Mino, position::Position)::Matrix{Int64}
+function generate_minopos(mino::AbstractMino, position::Position)::Matrix{Int64}
     board = zeros(Int64, 24, 10)
     mino_height, mino_width = size(mino.block)
 
@@ -163,14 +162,16 @@ function generate_minopos(mino::Mino, position::Position)::Matrix{Int64}
     return board
 end
 
+Tetris.Position(x::Int64, y::Int64) = Position(x |> Int8, y |> Int8)
+function Tetris.rotate(mino::AbstractMino, position::Position, binary_board::Matrix{Int8}, r::Int64)::Tuple{AbstractMino,Position,Bool} 
+    new_mino, new_position, has_rotated, _=  rotate(mino, position, binary_board, r |> Int8)
+    new_mino, new_position, has_rotated
+end
+Tetris.is_valid_mino_movement(mino::AbstractMino, position::Position, binary_board::Matrix{Int8}, mv_x::Int64, mv_y::Int64) = is_valid_mino_movement(mino, position, binary_board, mv_x |> Int8, mv_y |> Int8)
 
-Tetris.move(position::Position, x::Int64, y::Int64)::Position = move(position, x |> Int8, y |> Int8)
-Tetris.rotate(mino::Mino, position::Position, binary_board::Matrix{Int8}, r::Int64)::Tuple{Mino,Position,Bool} = rotate(mino, position, binary_board, r |> Int8)
-Tetris.valid_movement(mino::Mino, position::Position, binary_board::Matrix{Int8}, mv_x::Int64, mv_y::Int64) = valid_movement(mino, position, binary_board, mv_x |> Int8, mv_y |> Int8)
-
-function mino_to_array(mino::Union{Nothing,Mino})::Matrix{Float32}
+function mino_to_array(mino::Union{Nothing,AbstractMino})::Matrix{Float32}
     res = zeros(Float32, 7, 1)
-    index = findfirst(m == mino for m in Tetris.TetrisMino.minos)
+    index = findfirst(m == mino for m in Tetris.MINOS)
     if !isnothing(index)
         res[index] = 1
     end

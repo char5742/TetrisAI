@@ -12,6 +12,7 @@ Base.@kwdef struct _Config
     compress::Bool
 end
 
+
 function get_config()
     r= HTTP.request("GET", "$server/config")
     if r.status == 200

@@ -1,5 +1,5 @@
 # 可能動作の探索
-
+const FAST_MODE = true
 """
 左右移動は考慮せず、直下で設置できる箇所のみを探索する
 """
@@ -109,9 +109,16 @@ function get_node_list(
                     for _ in 1:abs(x - new_position.x)
                         push!(action_list, Action(x > new_position.x ? 1 : -1, 0, 0))
                     end
-                    for action in [action_list..., Action(0, 0, 0, false, true)]
-                        action!(state, action)
+                    if FAST_MODE
+                        state.current_mino = new_mino
+                        state.current_position = dropped_position
+                    else
+                        for action in [action_list..., Action(0, 0, 0, false, true)]
+                            action!(state, action)
+                        end
                     end
+
+
                     put_mino!(state)
                     # 未探索の盤面ならノードとして保存
                     if !haskey(simulated_board_dict, state.current_game_board.binary) || simulated_board_dict[state.current_game_board.binary] > length(action_list)
@@ -126,12 +133,21 @@ function get_node_list(
                     # 左右回転
                     for dor in [1, -1]
                         state = GameState(root_state)
-                        rotated_mino, rotated_position, has_rotate = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
+                        rotated_mino, rotated_position, has_rotate, srs_index = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
                         # 回転可能で、設置可能位置の場合
                         if has_rotate && !is_valid_mino_movement(rotated_mino, rotated_position, root_state.current_game_board.binary, 0, 1)
-                            for action in [action_list..., Action(0, 0, dor)]
-                                action!(state, action)
+
+                            if FAST_MODE
+                                state.current_mino = rotated_mino
+                                state.current_position = rotated_position
+                                state.srs_index = srs_index
+                                state.t_spin_flag = true
+                            else
+                                for action in [action_list..., Action(0, 0, dor)]
+                                    action!(state, action)
+                                end
                             end
+
                             tspin = check_tspin(state)
                             put_mino!(state)
                             if !haskey(simulated_board_dict, state.current_game_board.binary) || simulated_board_dict[state.current_game_board.binary] > length(action_list)
@@ -163,10 +179,7 @@ function generate_minopos(mino::AbstractMino, position::Position)::Matrix{Int64}
 end
 
 Tetris.Position(x::Int64, y::Int64) = Position(x |> Int8, y |> Int8)
-function Tetris.rotate(mino::AbstractMino, position::Position, binary_board::Matrix{Int8}, r::Int64)::Tuple{AbstractMino,Position,Bool} 
-    new_mino, new_position, has_rotated, _=  rotate(mino, position, binary_board, r |> Int8)
-    new_mino, new_position, has_rotated
-end
+Tetris.rotate(mino::AbstractMino, position::Position, binary_board::Matrix{Int8}, r::Int64)::Tuple{AbstractMino,Position,Bool,Int8} = rotate(mino, position, binary_board, r |> Int8)
 Tetris.is_valid_mino_movement(mino::AbstractMino, position::Position, binary_board::Matrix{Int8}, mv_x::Int64, mv_y::Int64) = is_valid_mino_movement(mino, position, binary_board, mv_x |> Int8, mv_y |> Int8)
 
 function mino_to_array(mino::Union{Nothing,AbstractMino})::Matrix{Float32}

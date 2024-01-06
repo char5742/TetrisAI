@@ -2,9 +2,11 @@ module TetrisAICore
 
 using JLD2
 using Tetris
-include("component/Component.jl")
-using .Component
-import .Component: Experience, Node, Memory, add!, sample, prioritized_sample!, sum_td, update_temporal_difference
+include("component/node.jl")
+include("component/experience.jl")
+include("component/memory.jl")
+include("component/reward.jl")
+
 export Experience, Node, Memory, add!, sample, prioritized_sample!, sum_td, update_temporal_difference
 include("ai/lux/Lux.jl")
 using .AILux

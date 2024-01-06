@@ -18,17 +18,17 @@ predicter: 盤面価値の予測関数
 """
 function select_node(node_list::Vector{Node}, state::GameState, predicter::Function)::Node
     currentbord = state.current_game_board.binary
-    current_combo = state.combo
+    current_ren = state.ren
     current_back_to_back = state.back_to_back_flag
     current_holdnext = [state.hold_mino, state.mino_list[end-4:end]...]
     minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in node_list] |> vector2array
     tspin_array = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in node_list] |> vector2array
     currentbord_array = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
-    current_combo_array = [current_combo |> Float32 for _ in 1:length(node_list)] |> vector2array
+    current_ren_array = [current_ren |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_holdnext_array = repeat(hcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     score_list =
-        predicter(currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array)
+        predicter(currentbord_array, minopos_array, current_ren_array, current_back_to_back_array, tspin_array, current_holdnext_array)
     if any(isnan, score_list) || any(isinf, score_list)
         throw("score_list is invalid")
     end
@@ -44,7 +44,7 @@ function select_node_list(node_list_list::Vector{Vector{Node}}, state_list::Vect
     currentbord_array = Array{Float32,4}(undef, 24, 10, 1, array_size)
     minopos_array = Array{Float32,4}(undef, 24, 10, 1, array_size)
     tspin_array = Array{Float32,2}(undef, 1, array_size)
-    current_combo_array = Array{Float32,2}(undef, 1, array_size)
+    current_ren_array = Array{Float32,2}(undef, 1, array_size)
     current_back_to_back_array = Array{Float32,2}(undef, 1, array_size)
     current_holdnext_array = Array{Float32,3}(undef, 7, 6, array_size)
     response = Vector{Union{Node,Nothing}}(undef, length(node_list_list))
@@ -58,18 +58,18 @@ function select_node_list(node_list_list::Vector{Vector{Node}}, state_list::Vect
         current_range = index:index+current_size-1
         index += current_size
         currentbord = state.current_game_board.binary
-        current_combo = state.combo
+        current_ren = state.ren
         current_back_to_back = state.back_to_back_flag
         current_holdnext = [state.hold_mino, state.mino_list[end-4:end]...]
         minopos_array[:, :, 1, current_range] = [generate_minopos(n.mino, n.position) .|> Float32 for n in node_list] |> vector2array
         tspin_array[:, current_range] = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in node_list] |> vector2array
         currentbord_array[:, :, 1, current_range] = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
-        current_combo_array[:, current_range] = [current_combo |> Float32 for _ in 1:length(node_list)] |> vector2array
+        current_ren_array[:, current_range] = [current_ren |> Float32 for _ in 1:length(node_list)] |> vector2array
         current_back_to_back_array[:, current_range] = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
         current_holdnext_array[:, :, current_range] = repeat(hcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     end
     score_list =
-        predicer(currentbord_array, minopos_array, current_combo_array, current_back_to_back_array, tspin_array, current_holdnext_array)
+        predicer(currentbord_array, minopos_array, current_ren_array, current_back_to_back_array, tspin_array, current_holdnext_array)
     index = 1
     for (i, node_list) in enumerate(node_list_list)
         current_size = length(node_list)
@@ -99,7 +99,7 @@ function calc_td_error(
     current_expect_reward = predicter(
         [state.current_game_board.binary] |> vector2array .|> Float32,
         [generate_minopos(node.mino, node.position)] |> vector2array .|> Float32,
-        [state.combo] |> vector2array .|> Float32,
+        [state.ren] |> vector2array .|> Float32,
         [state.back_to_back_flag] |> vector2array .|> Float32,
         [node.tspin] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in current_holdnext]...), 7, 6, 1),
@@ -118,7 +118,7 @@ function calc_td_error(
     next_score = target_predicter(
         [node.game_state.current_game_board.binary] |> vector2array .|> Float32,
         [generate_minopos(max_node.mino, max_node.position)] |> vector2array .|> Float32,
-        [node.game_state.combo] |> vector2array .|> Float32,
+        [node.game_state.ren] |> vector2array .|> Float32,
         [node.game_state.back_to_back_flag] |> vector2array .|> Float32,
         [max_node.tspin] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in node_holdnext]...), 7, 6, 1),

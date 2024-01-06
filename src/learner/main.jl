@@ -2,17 +2,17 @@ using ProgressBars
 using Printf
 include("../core/TetrisAICore.jl")
 using .TetrisAICore
-using Serialization
+
 using HTTP
 using CUDA
-using CodecZstd
 using Dates
 # https://github.com/JuliaGPU/CUDA.jl/pull/1943
 # CUDA.math_mode!(CUDA.FAST_MATH)
 
 const server = "http://127.0.0.1:10513"
-
+import Serialization
 include("../server/config.jl")
+include("../lib/compress.jl")
 
 
 function main(Config::_Config)
@@ -71,10 +71,7 @@ return ps, st
 function get_model_params(name::String)
     res = HTTP.request("GET", "$server/param/$name")
     if res.status == 200
-        buffer = IOBuffer(res.body)
-        stream = ZstdDecompressorStream(buffer)
-        ps, st = deserialize(stream)
-        close(stream)
+        ps, st = deserialize(res.body)
     else
         throw("Paramサーバーからparamを取得できませんでした")
     end
@@ -85,10 +82,8 @@ end
 Paramサーバーに新しいパラメータを送信する
 """
 function update_model_params(name::String, ps, st)
-    buffer = IOBuffer()
-    serialize(buffer, (ps, st) .|> cpu)
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    res = HTTP.request("POST", "$server/param/$name", body=compressed)
+    data = serialize((ps, st) .|> cpu)
+    res = HTTP.request("POST", "$server/param/$name", body=data)
     if res.status == 200
     else
         throw("Paramサーバーにparamを送信できませんでした")
@@ -101,10 +96,7 @@ Memoryサーバーからミニバッチを取得する
 function get_minibatch()::Vector{Tuple{Int,Experience}}
     res = HTTP.request("GET", "$server/memory")
     if res.status == 200
-        buffer = IOBuffer(res.body)
-        stream = ZstdDecompressorStream(buffer)
-        minibatch = deserialize(stream)
-        close(stream)
+        minibatch = deserialize(res.body)
     else
         throw("Memoryサーバーからミニバッチを取得できませんでした")
     end
@@ -114,9 +106,7 @@ end
 Memoryサーバー上のPriority, TD Errorを更新する
 """
 function update_priority(new_temporal_difference_list::Vector{Tuple{Int,Float32}})
-    buffer = IOBuffer()
-    serialize(buffer, new_temporal_difference_list)
-    res = HTTP.request("POST", "$server/memory/priority", body=take!(buffer))
+    res = HTTP.request("POST", "$server/memory/priority", body=serialize(new_temporal_difference_list))
     if res.status != 200
         throw("Memoryサーバー上のPriority, TD Errorを更新できませんでした")
     end
@@ -163,7 +153,7 @@ function initialize_learner(
     taget_update_cycle::Int64,
     taget_update_count::Int64,
 )::Learner
-    model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, 128)
+    model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, kernel_size)
     display(model)
     ps, st = get_model_params("mainmodel") .|> gpu
     t_ps, t_st = get_model_params("targetmodel") .|> gpu

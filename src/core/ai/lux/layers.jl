@@ -31,15 +31,11 @@ struct MultiHeadAttention <: Lux.LuxCore.AbstractExplicitContainerLayer{(:query,
     nheads
 end
 
-function (m::MultiHeadAttention)((x, encoder_output, mask), ps, st)
-    # x = (features, seq_len, batch_size) from decoder
-    # encoder_output = (features, seq_len, batch_size) from encoder
+function (m::MultiHeadAttention)((x, mask), ps, st)
+    # x = (features, seq_len, batch_size)
     q, _ = m.query(x, ps.query, st.query)
-
-    # Use encoder output as key and value
-    k, _ = m.key(encoder_output, ps.key, st.key)
-    v, _ = m.value(encoder_output, ps.value, st.value)
-
+    k, _ = m.key(x, ps.key, st.key)
+    v, _ = m.value(x, ps.value, st.value)
     st_dropout = nothing
     function fdrop(x)
         x, st_dropout = m.dropout(x, ps.dropout, st.dropout)
@@ -60,10 +56,10 @@ struct DecoderBlock <: Lux.LuxCore.AbstractExplicitContainerLayer{(:mha, :layer_
     layer_norm2
 end
 
-function (m::DecoderBlock)((x, encoder_output, mask), ps, st)
+function (m::DecoderBlock)((x, mask), ps, st)
     z = x
     norm_out, st_layer_norm1 = m.layer_norm1(z, ps.layer_norm1, st.layer_norm1)
-    attn_output, st_mha = m.mha((norm_out, encoder_output, mask), ps.mha, st.mha)
+    attn_output, st_mha = m.mha((norm_out, mask), ps.mha, st.mha)
     z = attn_output + z
 
     norm_out, st_layer_norm2 = m.layer_norm2(z, ps.layer_norm2, st.layer_norm2)
@@ -72,28 +68,24 @@ function (m::DecoderBlock)((x, encoder_output, mask), ps, st)
     z = dropout_out + z
 
     st = merge(st, (mha=st_mha, layer_norm1=st_layer_norm1, layer_norm2=st_layer_norm2, dropout=st_dropout,))
-    return (z, encoder_output, mask), st
+    return (z, mask), st
 end
 
 
-struct Decoder <: Lux.LuxCore.AbstractExplicitContainerLayer{(:q_embedding, :q_positional_encoding, :kv_embedding, :kv_positional_encoding, :blocks, :output)}
-    q_embedding
-    q_positional_encoding
-    kv_embedding
-    kv_positional_encoding
+struct Decoder <: Lux.LuxCore.AbstractExplicitContainerLayer{(:embedding, :positional_encoding, :blocks, :output)}
+    embedding
+    positional_encoding
     blocks
     output
 end
 
-function (m::Decoder)((q, kv, mask), ps, st)
+function (m::Decoder)((x, mask), ps, st)
     # x = (token_size, seq_len, batch_size)
-    kv, _ = m.kv_embedding(kv, ps.kv_embedding, st.kv_embedding)
-    kv, _ = m.kv_positional_encoding(kv, ps.kv_positional_encoding, st.kv_positional_encoding)
-    q, _ = m.q_embedding(q, ps.q_embedding, st.q_embedding)
-    q, _ = m.q_positional_encoding(q, ps.q_positional_encoding, st.q_positional_encoding)
+    x, _ = m.embedding(x, ps.embedding, st.embedding)
+    x, _ = m.positional_encoding(x, ps.positional_encoding, st.positional_encoding)
     # x = (features, seq_len, batch_size)
 
-    (x, _, _), st_blocks = m.blocks((q, kv, mask), ps.blocks, st.blocks)
+    (x, _), st_blocks = m.blocks((x, mask), ps.blocks, st.blocks)
     output, st_out = m.output(x, ps.output, st.output)
     # output = (token_size, seq_len, batch_size)
     st = merge(st, (blocks=st_blocks, output=st_out))

@@ -28,25 +28,21 @@ function memory_route(request::HTTP.Request)
 end
 
 function get_minibatch(memory::Memory)
-    batch = prioritized_sample!(memory, 16;priority=0.6)
-    buffer = IOBuffer()
-    serialize(buffer, batch)
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    HTTP.Response(200, compressed)
+    batch = prioritized_sample!(memory, 16; priority=0.6)
+    data = serialize(batch)
+    HTTP.Response(200, data)
 end
 
 function add_exp(memory::Memory, body)
-    stream = ZstdDecompressorStream(IOBuffer(body))
-    experience = deserialize(stream)
-    close(stream)
-    add!(memory, experience)
+    data = deserialize(body)
+    add!(memory, data)
     @info "現在のメモリindex: " * string(memory.index)
     HTTP.Response(200, "OK")
 end
 
 
 function update_priority(memory::Memory, body)
-    new_temporal_difference_list = deserialize(IOBuffer(body))
+    new_temporal_difference_list = deserialize(body)
     update_temporal_difference(memory, new_temporal_difference_list)
     HTTP.Response(200, "OK")
 end

@@ -2,6 +2,7 @@ module TetrisAICore
 
 using JLD2
 using Tetris
+using StatsBase
 include("component/node.jl")
 include("component/experience.jl")
 include("component/memory.jl")

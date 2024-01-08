@@ -1,12 +1,12 @@
 # 可能動作の探索
-const FAST_MODE = true
+
 """
 左右移動は考慮せず、直下で設置できる箇所のみを探索する
 """
-function _check_can_set!(space::Matrix{T}) where {T}
+function _check_can_set!(space::Matrix{T}, start_y) where {T}
     h, w = size(space)
     for j in 1:w
-        for i in 3:h
+        for i in start_y:h
             if space[i, j] == 0
                 space[:, j] .= 0
                 break
@@ -23,6 +23,23 @@ function _check_can_set!(space::Matrix{T}) where {T}
     end
 end
 
+"初期位置の左右が繋がっているかどうか"
+function _check_can_set_vertical!(space::Matrix{T}, start_position::Position) where {T}
+    h, w = size(space)
+    y, x = start_position.y + 2, start_position.x + 2
+    for j in [-1, 1]
+        for i in 1:w
+            if x + i * j > w || x + i * j < 1
+                break
+            end
+            if space[y, x+i*j-j] == 0
+                space[y, x+i*j] = 0
+            end
+        end
+    end
+end
+
+"重ならない位置を特定"
 function _check_overlap!(space::Matrix{T}, filter::Matrix{T}) where {T}
     space_height, space_width = size(space)
     filter_height, filter_width = size(filter)
@@ -40,20 +57,21 @@ function _check_overlap!(space::Matrix{T}, filter::Matrix{T}) where {T}
 end
 
 function serch_can_set_space(
-    mino_block::Matrix{T}, board::Matrix{T}
+    mino_block::Matrix{T}, board::Matrix{T}, start_position::Position
 )::Matrix{T} where {T}
     """
     shape=(24+2, 10+4)、1が置ける場所\n
     """
-    space = ones(T, (20 + 4 + 2, 10 + 4))
-    space[1:end-2, 3:end-2] .= board
+    space = ones(T, (20 + 4 + 4, 10 + 4))
+    space[3:end-2, 3:end-2] .= board
 
     # 重なってしまうマスを除く
     _check_overlap!(space, mino_block)
-    space[1:2, :] .= 0
+    space[1:start_position.y-1, :] .= 0
+    _check_can_set_vertical!(space, start_position)
 
     # 通れて下がふさがっている場所
-    _check_can_set!(space)
+    _check_can_set!(space, start_position.y + 2)
     return space
 end
 
@@ -97,27 +115,23 @@ function get_node_list(
         end
         if check
             can_set_place = serch_can_set_space(
-                new_mino.block, root_state.current_game_board.binary
+                new_mino.block, root_state.current_game_board.binary, new_position
             )
             for (i, v) in pairs(can_set_place)
                 if v == 1
                     state = GameState(root_state)
                     y, x = Tuple(i)
+                    y -= 2
                     x -= 2
                     dropped_position = Position(x, y)
                     action_list = AbstractAction[Action(0, 0, 0, hold, false), rotate_action_list...]
                     for _ in 1:abs(x - new_position.x)
                         push!(action_list, Action(x > new_position.x ? 1 : -1, 0, 0))
                     end
-                    if FAST_MODE
-                        state.current_mino = new_mino
-                        state.current_position = dropped_position
-                    else
-                        for action in [action_list..., Action(0, 0, 0, false, true)]
-                            action!(state, action)
-                        end
-                    end
 
+                    for action in [action_list..., Action(0, 0, 0, false, true)]
+                        action!(state, action)
+                    end
 
                     put_mino!(state)
                     # 未探索の盤面ならノードとして保存
@@ -136,16 +150,8 @@ function get_node_list(
                         rotated_mino, rotated_position, has_rotate, srs_index = rotate(new_mino, dropped_position, root_state.current_game_board.binary, dor)
                         # 回転可能で、設置可能位置の場合
                         if has_rotate && !is_valid_mino_movement(rotated_mino, rotated_position, root_state.current_game_board.binary, 0, 1)
-
-                            if FAST_MODE
-                                state.current_mino = rotated_mino
-                                state.current_position = rotated_position
-                                state.srs_index = srs_index
-                                state.t_spin_flag = true
-                            else
-                                for action in [action_list..., Action(0, 0, dor)]
-                                    action!(state, action)
-                                end
+                            for action in [action_list..., Action(0, 0, dor)]
+                                action!(state, action)
                             end
 
                             tspin = check_tspin(state)

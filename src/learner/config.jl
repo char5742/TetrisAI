@@ -8,7 +8,6 @@ Base.@kwdef struct _Config
     learning_rate::Float32
     batchsize::Int
     memoryscale::Int
-    epsilon_list::Vector{Float32}
     compress::Bool
 end
 

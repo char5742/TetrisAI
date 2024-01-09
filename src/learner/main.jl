@@ -9,7 +9,10 @@ using Dates
 # https://github.com/JuliaGPU/CUDA.jl/pull/1943
 # CUDA.math_mode!(CUDA.FAST_MATH)
 
-const server = "http://127.0.0.1:10513"
+const root = "http://127.0.0.1:10513"
+const memoryserver = "$root/memory"
+const paramserver = "$root/param"
+
 import Serialization
 include("../server/config.jl")
 include("../lib/compress.jl")
@@ -69,7 +72,7 @@ Paramサーバーからパラメータを取得する
 return ps, st
 """
 function get_model_params(name::String)
-    res = HTTP.request("GET", "$server/param/$name")
+    res = HTTP.request("GET", "$paramserver/$name")
     if res.status == 200
         ps, st = deserialize(res.body)
     else
@@ -83,7 +86,7 @@ Paramサーバーに新しいパラメータを送信する
 """
 function update_model_params(name::String, ps, st)
     data = serialize((ps, st) .|> cpu)
-    res = HTTP.request("POST", "$server/param/$name", body=data)
+    res = HTTP.request("POST", "$paramserver/$name", body=data)
     if res.status == 200
     else
         throw("Paramサーバーにparamを送信できませんでした")
@@ -94,7 +97,7 @@ end
 Memoryサーバーからミニバッチを取得する
 """
 function get_minibatch()::Vector{Tuple{Int,Experience}}
-    res = HTTP.request("GET", "$server/memory")
+    res = HTTP.request("GET", memoryserver)
     if res.status == 200
         minibatch = deserialize(res.body)
     else
@@ -106,7 +109,7 @@ end
 Memoryサーバー上のPriority, TD Errorを更新する
 """
 function update_priority(new_temporal_difference_list::Vector{Tuple{Int,Float32}})
-    res = HTTP.request("POST", "$server/memory/priority", body=serialize(new_temporal_difference_list))
+    res = HTTP.request("POST", "$memoryserver/priority", body=serialize(new_temporal_difference_list))
     if res.status != 200
         throw("Memoryサーバー上のPriority, TD Errorを更新できませんでした")
     end
@@ -165,7 +168,7 @@ function initialize_learner(
 end
 
 function check_ready_learning(memorysize::Int64)::Bool
-    res = HTTP.request("GET", "$server/memory/index")
+    res = HTTP.request("GET", "$memoryserver/index")
     if res.status == 200
         return parse(Int64, String(res.body)) >= memorysize
     else

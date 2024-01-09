@@ -118,7 +118,7 @@ function onestep!(game_state::GameState, actor::Actor, current_step::Int)
     node = select_node(actor, node_list, game_state, (x...) -> predict(actor.brain.main_model, x))
     tmp_nodelist = get_node_list(node.game_state)
     td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
-    exp = Experience(GameState(game_state), node, tmp_nodelist, td_error)
+    exp = Experience(GameState(game_state), node, td_error)
     for action in node.action_list
         action!(game_state, action)
     end

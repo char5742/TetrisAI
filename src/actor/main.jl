@@ -8,7 +8,7 @@ using Dates
 using Random
 using CUDA
 import Serialization
-# CUDA.math_mode!(CUDA.FAST_MATH;precision=:BFloat16)
+
 actor_id = parse(Int, ARGS[1])
 epsilon = parse(Float64, ARGS[2])
 use_gpu = parse(Bool, ARGS[3])

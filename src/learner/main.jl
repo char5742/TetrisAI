@@ -6,8 +6,6 @@ using .TetrisAICore
 using HTTP
 using CUDA
 using Dates
-# https://github.com/JuliaGPU/CUDA.jl/pull/1943
-# CUDA.math_mode!(CUDA.FAST_MATH)
 
 const root = "http://127.0.0.1:10513"
 const memoryserver = "$root/memory"
@@ -51,9 +49,6 @@ function main(Config::_Config)
                 minibatch_task = @async get_minibatch()
                 loss, qmean, tspin, new_temporal_difference_list = update_weight(learner, minibatch, Config.γ)
                 show_progress && set_description(iter, string(@sprintf("Loss: %9.4g, Qmean: %9.4g, tspin: %d", loss, qmean, tspin)))
-                # open("log.csv", "a") do io
-                #     println(io, @sprintf("%s, %9.4g, %9.4g",Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), loss, qmean))
-                # end
                 @async update_priority(new_temporal_difference_list)
                 minibatch = fetch(minibatch_task)
             catch e
@@ -135,7 +130,7 @@ end
 ミニバッチを用いて重みを更新する
 """
 function update_weight(learner::Learner, minibatch, γ)
-    loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, minibatch, γ)# i < 10e3 ? 200 :
+    loss, qmean, tspin, new_temporal_difference_list = qlearn(learner, Config.batchsize, minibatch, γ)
 
     if UpdateTimer.is_update_time()
         @async update_model_params("mainmodel", learner.brain.main_model.ps, learner.brain.main_model.st)

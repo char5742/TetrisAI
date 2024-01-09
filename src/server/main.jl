@@ -27,7 +27,6 @@ function router(request::HTTP.Request)
     return HTTP.Response(404, "Not Found") 
 end
 
-# HTTP.listen! and HTTP.serve! are the non-blocking versions of HTTP.listen/HTTP.serve
 HTTP.serve("0.0.0.0", 10513) do request::HTTP.Request
     try
         t = Threads.@spawn router(request)
@@ -36,7 +35,3 @@ HTTP.serve("0.0.0.0", 10513) do request::HTTP.Request
         return HTTP.Response(400, "Error: $e")
     end
 end
-
-
-# HTTP.serve! returns an `HTTP.Server` object that we can close manually
-# close(server)

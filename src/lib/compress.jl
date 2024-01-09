@@ -9,5 +9,5 @@ end
 
 function deserialize(byte)
     buffer = IOBuffer(byte)
-    Serialization.deserialize(Config.compress ? transcode(CodecZstd.ZstdDecompressor, buffer) : buffer)
+    Serialization.deserialize(Config.compress ? CodecZstd.ZstdDecompressorStream(buffer) : buffer)
 end

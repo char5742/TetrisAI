@@ -29,7 +29,7 @@ function calc_expected_rewards(
         max_node_minopos_array = [generate_minopos(n.mino, n.position) .|> Float32 for n in max_node_list if !isnothing(n)] |> vector2array
         node_ren_array = [node.game_state.ren |> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
         node_back_to_back_array = [node.game_state.back_to_back_flag |> Float32 for node in node_list if !node.game_state.game_over_flag] |> vector2array
-        max_node_tspin_array = [node.tspin |> Float32 for node in max_node_list if !isnothing(node)] |> vector2array
+        max_node_tspin_array = [min(node.tspin, 1) |> Float32 for node in max_node_list if !isnothing(node)] |> vector2array
         node_holdnext = reduce((x, y) -> cat(x, y, dims=3), reshape(hcat([mino_to_array(mino) for mino in [node.game_state.hold_mino, node.game_state.mino_list[end-4:end]...]]...), 7, 6, 1) for node in node_list if !node.game_state.game_over_flag)
         next_score_list =
             predict(brain.target_model,
@@ -87,7 +87,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
             minopos_array[:, :, 1, i] = generate_minopos(selected_node.mino, selected_node.position)
             prev_ren_array[i] = current_state.ren
             prev_back_to_back_array[i] = current_state.back_to_back_flag
-            prev_tspin_array[i] = selected_node.tspin
+            prev_tspin_array[i] = min(selected_node.tspin, 1)
             prev_holdnext_array[:, :, i] = hcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
 
             prev_score_list[i] = current_state.score

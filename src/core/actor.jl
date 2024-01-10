@@ -62,7 +62,7 @@ function select_node_list(node_list_list::Vector{Vector{Node}}, state_list::Vect
         current_back_to_back = state.back_to_back_flag
         current_holdnext = [state.hold_mino, state.mino_list[end-4:end]...]
         minopos_array[:, :, 1, current_range] = [generate_minopos(n.mino, n.position) .|> Float32 for n in node_list] |> vector2array
-        tspin_array[:, current_range] = [(n.tspin > 1 ? 1 : 0) |> Float32 for n in node_list] |> vector2array
+        tspin_array[:, current_range] = [min(n.tspin, 1) |> Float32 for n in node_list] |> vector2array
         currentbord_array[:, :, 1, current_range] = [currentbord .|> Float32 for _ in 1:length(node_list)] |> vector2array
         current_ren_array[:, current_range] = [current_ren |> Float32 for _ in 1:length(node_list)] |> vector2array
         current_back_to_back_array[:, current_range] = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
@@ -101,7 +101,7 @@ function calc_td_error(
         [generate_minopos(node.mino, node.position)] |> vector2array .|> Float32,
         [state.ren] |> vector2array .|> Float32,
         [state.back_to_back_flag] |> vector2array .|> Float32,
-        [node.tspin] |> vector2array .|> Float32,
+        [min(node.tspin, 1)] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in current_holdnext]...), 7, 6, 1),
     )[1]
     if any(isnan, current_expect_reward) || any(isinf, current_expect_reward)
@@ -120,7 +120,7 @@ function calc_td_error(
         [generate_minopos(max_node.mino, max_node.position)] |> vector2array .|> Float32,
         [node.game_state.ren] |> vector2array .|> Float32,
         [node.game_state.back_to_back_flag] |> vector2array .|> Float32,
-        [max_node.tspin] |> vector2array .|> Float32,
+        [min(max_node.tspin,1)] |> vector2array .|> Float32,
         reshape(hcat([mino_to_array(mino) for mino in node_holdnext]...), 7, 6, 1),
     )[1]
     if any(isnan, next_score) || any(isinf, next_score)

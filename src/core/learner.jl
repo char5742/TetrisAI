@@ -81,6 +81,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
         for (i, (id, (;
             current_state,
             selected_node,
+            next_node_list,
             temporal_difference
         ))) in collect(enumerate(id_and_exp))
             prev_game_board_array[:, :, 1, i] = current_state.current_game_board.binary
@@ -91,7 +92,7 @@ function qlearn(learner::Learner, batch_size, id_and_exp::Vector{Tuple{Int,Exper
             prev_holdnext_array[:, :, i] = hcat([mino_to_array(mino) for mino in [current_state.hold_mino, current_state.mino_list[end-4:end]...]]...)
 
             prev_score_list[i] = current_state.score
-            next_node_list_list[i] = get_node_list(selected_node.game_state)
+            next_node_list_list[i] = next_node_list
             selected_node_list[i] = selected_node
         end
         current_expect_reward_array =

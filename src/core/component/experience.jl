@@ -3,5 +3,6 @@
 mutable struct Experience
     current_state::GameState
     selected_node::Node
+    next_node_list::Vector{Node}
     temporal_difference::Float64
 end

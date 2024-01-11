@@ -20,6 +20,8 @@ const memoryserver = "$root/memory"
 const paramserver = "$root/param"
 
 include("config.jl")
+include("../lib/compress.jl")
+
 
 function main()
     actor = initialize_actor(
@@ -118,7 +120,7 @@ function onestep!(game_state::GameState, actor::Actor, current_step::Int)
     node = select_node(actor, node_list, game_state, (x...) -> predict(actor.brain.main_model, x))
     tmp_nodelist = get_node_list(node.game_state)
     td_error = calc_td_error(game_state, node, tmp_nodelist, Config.γ, (x...) -> predict(actor.brain.main_model, x), (x...) -> predict(actor.brain.target_model, x))
-    exp = Experience(GameState(game_state), node, td_error)
+    exp = Experience(GameState(game_state), tmp_nodelist, node, td_error)
     for action in node.action_list
         action!(game_state, action)
     end
@@ -147,10 +149,7 @@ end
 経験をmemoryサーバーに送信する
 """
 function upload_exp(exp::Experience)
-    buffer = IOBuffer()
-    serialize(buffer, exp)
-    compressed = transcode(ZstdCompressor, take!(buffer))
-    res = HTTP.request("POST", memoryserver, body=compressed)
+    res = HTTP.request("POST", memoryserver, body=serialize(exp))
     if res.status != 200
         throw("Memoryサーバーに経験を送信できませんでした")
     end

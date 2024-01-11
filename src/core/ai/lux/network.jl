@@ -12,14 +12,14 @@ struct BoardNet <: Lux.LuxCore.AbstractExplicitContainerLayer{(:conv1, :norm1, :
     norm2
     gmp
 end
-function BoardNet(kernel_size, resblock_size, output_size)
+function BoardNet(channel_size, resblock_size, output_size)
     return BoardNet(
-        Conv((3, 3), 2 => kernel_size; pad=SamePad()),
-        BatchNorm(kernel_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
+        Conv((3, 3), 2 => channel_size; pad=SamePad()),
+        BatchNorm(channel_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
         Chain(
-            [ResNetBlock(kernel_size) for _ in 1:resblock_size]...,
+            [ResNetBlock(channel_size) for _ in 1:resblock_size]...,
         ),
-        Conv((3, 3), kernel_size => output_size; pad=SamePad()),
+        Conv((3, 3), channel_size => output_size; pad=SamePad()),
         BatchNorm(output_size; epsilon=Float16(1.0f-6), momentum=Float16(0.1f0)),
         GlobalMeanPool(), # (24, 10, output_size) -> (1, 1, output_size)
     )
@@ -88,12 +88,12 @@ mino_list: size(7, 6, B) HOLD+NEXT
 arg: (bord_input_prev ,minopos, ren_input,back_to_back, tspin, mino_list)  
 return score  
 """
-function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::Int64)
+function QNetwork(channel_size::Int64, resblock_size::Int64, boardhidden_size::Int64)
     matrix_size = 48
     nheads = 3
     # return Chain(
     #     _QNetwork(
-    #         BoardNet(kernel_size, resblock_size, boardhidden_size),
+    #         BoardNet(channel_size, resblock_size, boardhidden_size),
     #         Dense(1 => matrix_size, gelu),
     #         Dense(1 => matrix_size, gelu),
     #         Dense(1 => matrix_size, gelu),
@@ -105,7 +105,7 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     # )
     Chain(
         _QNetwork(
-            BoardNet(kernel_size, resblock_size, 1),
+            BoardNet(channel_size, resblock_size, 1),
             NoOpLayer(),
             NoOpLayer(),
             NoOpLayer(),
@@ -117,7 +117,7 @@ function QNetwork(kernel_size::Int64, resblock_size::Int64, boardhidden_size::In
     )
 end
 
-# 1_258_497, kernel_size=32, res_blocks=4,
+# 1_258_497, channel_size=32, res_blocks=4,
 function ResNetBlock(n)
     layers = Chain(
         Conv((3, 3), n => n, pad=SamePad()),
@@ -200,14 +200,14 @@ end
 
 
 
-function create_model(kernel_size::Int64, resblock_size::Int64, boardhidden_size::Int64; use_gpu::Bool=true)
+function create_model(channel_size::Int64, resblock_size::Int64, boardhidden_size::Int64; use_gpu::Bool=true)
     rng = Random.default_rng()
     if (use_gpu)
-        model = QNetwork(kernel_size, resblock_size, boardhidden_size)
+        model = QNetwork(channel_size, resblock_size, boardhidden_size)
         ps, st = Lux.LuxCore.setup(rng, model) .|> gpu
         return model, ps, st
     else
-        model = QNetwork(kernel_size, resblock_size, boardhidden_size)
+        model = QNetwork(channel_size, resblock_size, boardhidden_size)
         ps, st = Lux.LuxCore.setup(rng, model)
         return model, ps, st
     end

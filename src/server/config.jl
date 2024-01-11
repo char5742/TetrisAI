@@ -1,20 +1,27 @@
 Base.@kwdef struct _Config
+    "学習済みモデルから学習を再開するかどうか"
     load_params::Bool
-    kernel_size::Int
+    "チャンネル数"
+    channel_size::Int
+    "残渣ブロックの数"
     res_blocks::Int
     "時間割引率"
     γ::Float64
+    "targetmodelの更新間隔"
     ddqn_timing::Int
+    "学習率"
     learning_rate::Float32
     batchsize::Int
+    "経験の保持数を算出する際に利用する。経験の保持数 = memoryscale * batchsize"
     memoryscale::Int
+    "通信時に圧縮を行うかどうか"
     compress::Bool
 end
 
 
 Config = _Config(
     load_params=false,
-    kernel_size=256,
+    channel_size=256,
     res_blocks=8,
     γ=0.997,
     ddqn_timing=400,

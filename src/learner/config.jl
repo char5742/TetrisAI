@@ -1,6 +1,6 @@
 Base.@kwdef struct _Config
     load_params::Bool
-    kernel_size::Int
+    channel_size::Int
     res_blocks::Int
     "時間割引率"
     γ::Float64

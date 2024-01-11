@@ -19,7 +19,7 @@ include("../lib/compress.jl")
 function main(Config::_Config)
     current_learning_rate = Config.learning_rate
     learner = initialize_learner(
-        Config.kernel_size,
+        Config.channel_size,
         Config.res_blocks,
         current_learning_rate,
         Config.ddqn_timing,
@@ -145,13 +145,13 @@ end
 Learnerを初期化する
 """
 function initialize_learner(
-    kernel_size::Int64,
+    channel_size::Int64,
     resblock_size::Int64,
     learning_rate,
     taget_update_cycle::Int64,
     taget_update_count::Int64,
 )::Learner
-    model, _, _ = TetrisAICore.create_model(kernel_size, resblock_size, kernel_size)
+    model, _, _ = TetrisAICore.create_model(channel_size, resblock_size, channel_size)
     display(model)
     ps, st = get_model_params("mainmodel") .|> gpu
     t_ps, t_st = get_model_params("targetmodel") .|> gpu

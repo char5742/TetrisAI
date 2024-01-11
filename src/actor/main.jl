@@ -23,7 +23,7 @@ include("../lib/compress.jl")
 function main()
     actor = initialize_actor(
         actor_id,
-        Config.kernel_size,
+        Config.channel_size,
         Config.res_blocks,
         epsilon,
         use_gpu=use_gpu,
@@ -88,12 +88,12 @@ Actorを初期化する
 """
 function initialize_actor(
     actor_id::Int64,
-    kernel_size::Int64,
+    channel_size::Int64,
     resblock_size::Int64,
     epsilon::Float64;
     use_gpu=false
 )
-    model, ps, st = create_model(kernel_size, resblock_size, kernel_size; use_gpu=use_gpu)
+    model, ps, st = create_model(channel_size, resblock_size, channel_size; use_gpu=use_gpu)
     t_ps, t_st = ps, st
     try
         ps, st = get_model_params("mainmodel")

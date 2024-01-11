@@ -3,10 +3,10 @@ module TetrisAICore
 using JLD2
 using Tetris
 using StatsBase
-include("component/node.jl")
-include("component/experience.jl")
-include("component/memory.jl")
-include("component/reward.jl")
+include("components/node.jl")
+include("components/experience.jl")
+include("components/memory.jl")
+include("components/reward.jl")
 
 export Experience, Node, Memory, add!, sample, prioritized_sample!, sum_td, update_temporal_difference
 include("ai/lux/Lux.jl")

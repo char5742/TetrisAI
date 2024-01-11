@@ -25,6 +25,7 @@ include("network.jl")
 export QNetwork, create_model
 include("predict.jl")
 export predict, vector2array
+include("optimiser.jl")
 include("fit.jl")
 export fit, create_optim, set_weightdecay, update_learningrate!
 end

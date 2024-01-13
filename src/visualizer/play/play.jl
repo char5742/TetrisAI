@@ -72,7 +72,7 @@ function select_node(node_list::Vector{Node}, state::GameState, predicter::Funct
     current_back_to_back_array = [current_back_to_back |> Float32 for _ in 1:length(node_list)] |> vector2array
     current_holdnext_array = repeat(hcat([mino_to_array(mino) for mino in current_holdnext]...), 1, 1, length(node_list))
     # use 
-    NEXT = 4
+    NEXT = 5
     current_holdnext_array[:, 2:end-NEXT, :] .= 0
     if NEXT == 0
         current_holdnext_array[:, 1, :] .= 0

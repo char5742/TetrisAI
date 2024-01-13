@@ -15,9 +15,7 @@ return ps, st
 function get_model_params(name::String)
     res = HTTP.request("GET", "$paramserver/$name")
     if res.status == 200
-        buffer = IOBuffer(res.body)
-        stream = ZstdDecompressorStream(buffer)
-        ps, st = deserialize(stream)
+        ps, st = deserialize(res.body)
     else
         throw("Paramサーバーからparamを取得できませんでした")
     end

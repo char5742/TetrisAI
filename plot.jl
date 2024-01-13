@@ -21,16 +21,6 @@ end
 # 経過時間に変換する
 data[:, 1] = data[:, 1] .- data[1]
 
-# CSVからデータを読み込む
-# data = open("log.csv", "r") do io
-#     lines = readlines(io)
-#     splited = [split(line, ',') for line in lines]
-#     splited = [[Time(line[9], "HH:MM:SS") , parse(Int64, line[10])] for line in splited]
-#     m = hcat(splited...)
-#     permutedims(m, (2,1))
-# end
-
-
 # 100区間移動平均を計算する
 window_size = 100
 moving_average = [i > window_size ? mean(data[i-window_size+1:i, 2]) : mean(data[1:i, 2]) for i in 1:size(data, 1)]

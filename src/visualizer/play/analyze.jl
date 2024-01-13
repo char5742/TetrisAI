@@ -36,9 +36,8 @@ end
 using .TetrisAICore
 
 NEXT = parse(Int, ARGS[1])
-PREFIX = "./output/256_NEXT"
+PREFIX = "./output/NEXT"
 function main()
-    # model, _, _ = create_model(128, 5, 128; use_gpu=true)
     model, ps, st = loadmodel("mainmodel.jld2")
     display(model)
     ps = ps |> gpu

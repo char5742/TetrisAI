@@ -13,7 +13,7 @@ end
 
 
 function get_config()
-    r= HTTP.request("GET", "$server/config")
+    r= HTTP.request("GET", "$ROOT/config")
     if r.status == 200
         config = Serialization.deserialize(r.body)
     else

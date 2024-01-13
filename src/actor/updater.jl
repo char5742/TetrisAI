@@ -4,8 +4,9 @@ using Serialization
 using HTTP
 using CodecZstd
 using JLD2
-const root = "http://127.0.0.1:10513"
-const paramserver = "$root/param"
+const ROOT = "http://127.0.0.1:10513"
+const PARAMSERVER = "$ROOT/param"
+const UPDATE_INTERVAL = 10.0
 include("config.jl")
 
 """
@@ -13,7 +14,7 @@ Paramサーバーからパラメータを取得する
 return ps, st
 """
 function get_model_params(name::String)
-    res = HTTP.request("GET", "$paramserver/$name")
+    res = HTTP.request("GET", "$PARAMSERVER/$name")
     if res.status == 200
         ps, st = deserialize(res.body)
     else

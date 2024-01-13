@@ -14,7 +14,7 @@ end
 
 
 function get_config()
-    r= HTTP.request("GET", "$root/config")
+    r= HTTP.request("GET", "$ROOT/config")
     if r.status == 200
         buffer = IOBuffer(r.body)
         config = Serialization.deserialize(buffer)

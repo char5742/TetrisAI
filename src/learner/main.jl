@@ -7,9 +7,9 @@ using HTTP
 using CUDA
 using Dates
 
-const root = "http://127.0.0.1:10513"
-const memoryserver = "$root/memory"
-const paramserver = "$root/param"
+const ROOT = "http://127.0.0.1:10513"
+const MEMORYSERVER = "$ROOT/memory"
+const PARAMSERVER = "$ROOT/param"
 
 import Serialization
 include("../server/config.jl")
@@ -67,7 +67,7 @@ Paramサーバーからパラメータを取得する
 return ps, st
 """
 function get_model_params(name::String)
-    res = HTTP.request("GET", "$paramserver/$name")
+    res = HTTP.request("GET", "$PARAMSERVER/$name")
     if res.status == 200
         ps, st = deserialize(res.body)
     else
@@ -81,7 +81,7 @@ Paramサーバーに新しいパラメータを送信する
 """
 function update_model_params(name::String, ps, st)
     data = serialize((ps, st) .|> cpu)
-    res = HTTP.request("POST", "$paramserver/$name", body=data)
+    res = HTTP.request("POST", "$PARAMSERVER/$name", body=data)
     if res.status == 200
     else
         throw("Paramサーバーにparamを送信できませんでした")
@@ -92,7 +92,7 @@ end
 Memoryサーバーからミニバッチを取得する
 """
 function get_minibatch()::Vector{Tuple{Int,Experience}}
-    res = HTTP.request("GET", memoryserver)
+    res = HTTP.request("GET", MEMORYSERVER)
     if res.status == 200
         minibatch = deserialize(res.body)
     else
@@ -104,7 +104,7 @@ end
 Memoryサーバー上のPriority, TD Errorを更新する
 """
 function update_priority(new_temporal_difference_list::Vector{Tuple{Int,Float32}})
-    res = HTTP.request("POST", "$memoryserver/priority", body=serialize(new_temporal_difference_list))
+    res = HTTP.request("POST", "$MEMORYSERVER/priority", body=serialize(new_temporal_difference_list))
     if res.status != 200
         throw("Memoryサーバー上のPriority, TD Errorを更新できませんでした")
     end
@@ -113,11 +113,12 @@ end
 
 module UpdateTimer
 last_time = time()
+const UPDATE_INTERVAL = 10.0
 function is_update_time()
     global last_time
     now = time()
     dt = now - last_time
-    if dt > 10.0
+    if dt > UPDATE_INTERVAL
         last_time = now
         true
     else
@@ -163,7 +164,7 @@ function initialize_learner(
 end
 
 function check_ready_learning(memorysize::Int64)::Bool
-    res = HTTP.request("GET", "$memoryserver/index")
+    res = HTTP.request("GET", "$MEMORYSERVER/index")
     if res.status == 200
         return parse(Int64, String(res.body)) >= memorysize
     else

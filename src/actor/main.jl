@@ -13,9 +13,9 @@ actor_id = parse(Int, ARGS[1])
 epsilon = parse(Float64, ARGS[2])
 use_gpu = parse(Bool, ARGS[3])
 
-const root = "http://127.0.0.1:10513"
-const memoryserver = "$root/memory"
-const paramserver = "$root/param"
+const ROOT = "http://127.0.0.1:10513"
+const MEMORYSERVER = "$ROOT/memory"
+const PARAMSERVER = "$ROOT/param"
 
 include("config.jl")
 include("../lib/compress.jl")
@@ -136,7 +136,7 @@ Paramサーバーからパラメータを取得する
 return ps, st
 """
 function get_model_params(name::String)
-    res = HTTP.request("GET", "$paramserver/$name")
+    res = HTTP.request("GET", "$PARAMSERVER/$name")
     if res.status == 200
         ps, st = deserialize(res.body)
     else
@@ -149,7 +149,7 @@ end
 経験をmemoryサーバーに送信する
 """
 function upload_exp(exp::Experience)
-    res = HTTP.request("POST", memoryserver, body=serialize(exp))
+    res = HTTP.request("POST", MEMORYSERVER, body=serialize(exp))
     if res.status != 200
         throw("Memoryサーバーに経験を送信できませんでした")
     end

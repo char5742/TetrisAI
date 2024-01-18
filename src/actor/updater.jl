@@ -1,12 +1,13 @@
 include("../core/TetrisAICore.jl")
 using .TetrisAICore
-using Serialization
 using HTTP
-using CodecZstd
 using JLD2
+
 const ROOT = "http://127.0.0.1:10513"
 const PARAMSERVER = "$ROOT/param"
-const UPDATE_INTERVAL = 10.0
+const UPDATE_INTERVAL = 60.0
+
+include("../lib/compress.jl")
 include("config.jl")
 
 """
@@ -31,18 +32,23 @@ function main()
     # 60秒に一回パラメータを取得する
     while true
         try
-            touch("model/model.lock")
             try
                 ps, st = get_model_params("mainmodel")
-                jldsave("model/mainmodel.jld2"; ps=ps, st=st)
+                jldsave("model/temp_mainmodel.jld2"; ps=ps, st=st)
                 ps, st = get_model_params("targetmodel")
-                jldsave("model/targetmodel.jld2"; ps=ps, st=st)
+                jldsave("model/temp_targetmodel.jld2"; ps=ps, st=st)
+            catch
+            end
+            touch("model/model.lock")
+            try
+                mv("model/temp_mainmodel.jld2", "model/mainmodel.jld2"; force=true)
+                mv("model/temp_targetmodel.jld2", "model/targetmodel.jld2"; force=true)
             catch
             finally
                 rm("model/model.lock")
             end
             GC.gc()
-            sleep(60)
+            sleep(UPDATE_INTERVAL)
         catch e
             @error e
         end
